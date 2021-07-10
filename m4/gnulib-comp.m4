@@ -41,6 +41,7 @@ AC_DEFUN([gl_EARLY],
   # Code from module stddef:
   # Code from module stdint:
   # Code from module string:
+  # Code from module strtok_r:
   # Code from module warn-on-use:
 ])
 
@@ -92,6 +93,8 @@ gl_SIGNAL_MODULE_INDICATOR([sigprocmask])
 gl_STDDEF_H
 gl_STDINT_H
 gl_HEADER_STRING_H
+gl_FUNC_STRTOK_R
+gl_STRING_MODULE_INDICATOR([strtok_r])
   # End of code from modules
   m4_ifval(gl_LIBSOURCES_LIST, [
     m4_syscmd([test ! -d ]m4_defn([gl_LIBSOURCES_DIR])[ ||
@@ -247,6 +250,7 @@ AC_DEFUN([gl_FILE_LIST], [
   lib/stdint.in.h
   lib/str-two-way.h
   lib/string.in.h
+  lib/strtok_r.c
   m4/00gnulib.m4
   m4/extensions.m4
   m4/gnulib-common.m4
@@ -263,6 +267,7 @@ AC_DEFUN([gl_FILE_LIST], [
   m4/stddef_h.m4
   m4/stdint.m4
   m4/string_h.m4
+  m4/strtok_r.m4
   m4/warn-on-use.m4
   m4/wchar_t.m4
 ])

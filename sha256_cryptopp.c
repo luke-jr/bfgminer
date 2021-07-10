@@ -1,3 +1,14 @@
+/*
+ * Copyright 2010-2011 Jeff Garzik
+ * Copyright 2002-2010 Wei Dai (released as public domain)
+ * Copyright 2012-2013 Luke Dashjr
+ * Copyright 2011 Con Kolivas
+ *
+ * This program is free software; you can redistribute it and/or modify it
+ * under the terms of the GNU General Public License as published by the Free
+ * Software Foundation; either version 3 of the License, or (at your option)
+ * any later version.  See COPYING for more details.
+ */
 
 #include "config.h"
 
@@ -6,6 +17,8 @@
 #include <string.h>
 #include <stdlib.h>
 #include <stdio.h>
+
+#include "driver-cpu.h"
 #include "miner.h"
 
 typedef uint32_t word32;
@@ -93,34 +106,46 @@ static void runhash(void *state, const void *input, const void *init)
 }
 
 /* suspiciously similar to ScanHash* from bitcoin */
-bool scanhash_cryptopp(struct thr_info*thr, const unsigned char *midstate,
-		unsigned char *data,
-	        unsigned char *hash1, unsigned char *hash,
-		const unsigned char *target,
+bool scanhash_cryptopp(struct thr_info * const thr, struct work * const work,
 	        uint32_t max_nonce, uint32_t *last_nonce,
 		uint32_t n)
 {
+	const uint8_t *midstate = work->midstate;
+	uint8_t *data = work->data;
+	uint8_t hash1[0x40];
+	memcpy(hash1, hash1_init, sizeof(hash1));
+	uint8_t * const hash = work->hash;
+	
 	uint32_t *hash32 = (uint32_t *) hash;
 	uint32_t *nonce = (uint32_t *)(data + 76);
 
 	data += 64;
 
+	// Midstate and data are stored in little endian
+	LOCAL_swap32le(unsigned char, midstate, 32/4)
+	LOCAL_swap32le(unsigned char, data, 64/4)
+	uint32_t *nonce_w = (uint32_t *)(data + 12);
+
 	while (1) {
-		n++;
-		*nonce = n;
+		*nonce_w = n;
 
 		runhash(hash1, data, midstate);
 		runhash(hash, hash1, sha256_init_state);
 
-		if (unlikely((hash32[7] == 0) && fulltest(hash, target))) {
+		if (unlikely((hash32[7] == 0)))
+		{
+			*nonce = htole32(n);
 			*last_nonce = n;
 			return true;
 		}
 
 		if ((n >= max_nonce) || thr->work_restart) {
+			*nonce = htole32(n);
 			*last_nonce = n;
 			return false;
 		}
+
+		n++;
 	}
 }
 
@@ -555,15 +580,11 @@ static void CRYPTOPP_FASTCALL X86_SHA256_HashBlocks(word32 *state, const word32 
 #endif
 }
 
-static inline bool HasSSE2(void) { return false; }
-
 static void SHA256_Transform32(word32 *state, const word32 *data)
 {
 	word32 W[16];
-	int i;
 
-	for (i = 0; i < 16; i++)
-		W[i] = swab32(((word32 *)(data))[i]);
+	swap32yes(W, data, 16);
 
 	X86_SHA256_HashBlocks(state, W, 16 * 4);
 }
@@ -575,26 +596,29 @@ static void runhash32(void *state, const void *input, const void *init)
 }
 
 /* suspiciously similar to ScanHash* from bitcoin */
-bool scanhash_asm32(struct thr_info*thr, const unsigned char *midstate,
-		unsigned char *data,
-	        unsigned char *hash1, unsigned char *hash,
-		const unsigned char *target,
+bool scanhash_asm32(struct thr_info * const thr, struct work * const work,
 	        uint32_t max_nonce, uint32_t *last_nonce,
 		uint32_t n)
 {
+	const uint8_t * const midstate = work->midstate;
+	uint8_t *data = work->data;
+	uint8_t hash1[0x40];
+	memcpy(hash1, hash1_init, sizeof(hash1));
+	uint8_t * const hash = work->hash;
+	
 	uint32_t *hash32 = (uint32_t *) hash;
 	uint32_t *nonce = (uint32_t *)(data + 76);
 
 	data += 64;
 
 	while (1) {
-		n++;
 		*nonce = n;
 
 		runhash32(hash1, data, midstate);
 		runhash32(hash, hash1, sha256_init_state);
 
-		if (unlikely((hash32[7] == 0) && fulltest(hash, target))) {
+		if (unlikely(hash32[7] == 0))
+		{
 			*last_nonce = n;
 			return true;
 		}
@@ -603,6 +627,8 @@ bool scanhash_asm32(struct thr_info*thr, const unsigned char *midstate,
 			*last_nonce = n;
 			return false;
 		}
+
+		++n;
 	}
 }
 

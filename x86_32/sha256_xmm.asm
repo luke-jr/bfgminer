@@ -1,10 +1,13 @@
-;; SHA-256 for X86 for Linux, based off of:A
-
-; (c) Ufasoft 2011 http://ufasoft.com mailto:support@ufasoft.com
-; Version 2011
-; This software is Public Domain
-
-; SHA-256 CPU SSE cruncher for Bitcoin Miner
+;/*
+; * Copyright 2011 Ufasoft
+; * Copyright 2012 Guido Ascioti <guido.ascioti@gmail.com>
+; * Copyright 2012 Luke Dashjr
+; *
+; * This program is free software; you can redistribute it and/or modify it
+; * under the terms of the GNU General Public License as published by the Free
+; * Software Foundation; either version 3 of the License, or (at your option)
+; * any later version.  See COPYING for more details.
+; */
 
 ALIGN 32
 BITS 32

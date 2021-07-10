@@ -1,4 +1,11 @@
 #!/bin/bash
+# Copyright 2012-2014 Luke Dashjr
+#
+# This program is free software; you can redistribute it and/or modify it
+# under the terms of the GNU General Public License as published by the Free
+# Software Foundation; either version 3 of the License, or (at your option)
+# any later version.  See COPYING for more details.
+
 set -e
 set -x
 tag="$1"; shift
@@ -6,60 +13,198 @@ tag="$1"; shift
 sw="$1"; shift || true
 [ -n "$sw" ] || sw="$tag"
 
-IDIR="$PWD"
-ZIPNAME="${sw}-win32"
-OUTDIR="$PWD/w32zip/$ZIPNAME"
-TMPDIR="${OUTDIR}-tmp"
+test -n "$DEBUG_RELEASE" || DEBUG_RELEASE=1
 
-set -e
-mkdir -v "$OUTDIR"
-cp -v \
-	-L \
-	pdcurses.dll \
-	libcurl-4.dll \
-	pthreadGC2.dll \
-	libusb-1.0.dll \
-	zlib1.dll \
-	"$OUTDIR/"
+builds=(win32 win64)
+
+win32_machine='i686-pc-mingw32'
+win32_CFLAGS='-march=i686'
+
+win64_machine='x86_64-w64-mingw32'
+win64_CFLAGS=''
+
+IDIR="$PWD"
+OUTDIR="$PWD"
+TMPROOT="$PWD/make-release-tmp"
+TMPDIR="${TMPROOT}/${sw}-tmp"
+
+mkdir -vp "$TMPDIR"
+
+# Source release
 git branch TMP "$tag"
 git clone . "$TMPDIR" -b TMP --depth 1
 git branch -D TMP
 cd "$TMPDIR"
-git archive --prefix "$sw"/ --format tar "$tag" | tar xvp
-cd "$sw"
-./autogen.sh
-cd ..
-zip -r "$IDIR/${sw}.zip" "$sw"
-tar cjvpf "$IDIR/${sw}.tbz2" "$sw"
-SRCDIR="$TMPDIR/$sw"
-for txt in AUTHORS COPYING NEWS README API-README FPGA-README; do
-	cp -v "$txt" "$OUTDIR/${txt}.txt"
+sed 's/^\[submodule "\(.*\)"\]$/\1/;t;d' .gitmodules |
+ while read submodule; do
+	git config submodule.$submodule.url "$IDIR/.git/modules/$submodule"
 done
-cp -av "bitstreams" "$OUTDIR/"
-cp -av "$IDIR/"ADL_SDK/adl_{defines,sdk,structures}.h "ADL_SDK/"
+git submodule update --init
+{
+	git archive --prefix "$sw"/ --format tar "$tag"
+	git submodule --quiet foreach --recursive 'test x$name = xccan || git archive --prefix "'"$sw"'/$path/" --format tar HEAD'
+	(
+		cd ccan-upstream
+		git archive --prefix "$sw/ccan-upstream/" --format tar HEAD ccan/{build_assert,cast,compiler,opt,typesafe_cb} licenses/{CC0,GPL-3,LGPL-2.1}
+	)
+} | tar -xivp
+rm -r "$sw"/knc-asic/{*.rbf,*system,waas}
+./gen-version.sh >"$sw"/version.h
+cd "$sw"
+NOSUBMODULES=1 \
+NOCONFIGURE=1 \
 ./autogen.sh
-./configure \
-	--prefix='C:\\Program Files\\BFGMiner\' \
-	CFLAGS='-march=i686 -Wall' \
-	--disable-cpumining \
-	--enable-opencl \
-	--enable-adl \
-	--enable-bitforce \
-	--enable-icarus \
-	--enable-modminer \
-	--enable-ztex \
-	--build=i686-pc-linux-gnu \
-	--host=i686-pc-mingw32
-make -j4
-cp -v \
-	bfgminer.exe \
-	*.cl \
-	example.conf \
-	windows-build.txt \
-	API.class \
-	miner.php \
-	"$OUTDIR/" -v
-cd "$OUTDIR"
+find . -name autom4te.cache |
+ xargs rm -r
 cd ..
-zip -r "$IDIR/${ZIPNAME}.zip" "${ZIPNAME}"
+zip -y -r "$OUTDIR/${sw}.zip" "$sw"
+tar -cJvpf "$OUTDIR/${sw}.txz" "$sw"
+SRCDIR="$TMPDIR/$sw"
+
+docs='
+	AUTHORS
+	COPYING
+	NEWS
+	README
+	README.ASIC
+	README.FPGA
+	README.GPU
+	README.RPC
+	README.scrypt
+'
+for build in "${builds[@]}"; do
+	PKGNAME="${sw}-${build}"
+	PKGDIR="$TMPDIR/$PKGNAME"
+	cd "$SRCDIR"
+	mkdir -vp "$PKGDIR"
+	for v in machine CFLAGS; do
+		eval "${v}"="'$(eval echo "\${${build}_${v}}")'"
+	done
+	if test "x$DEBUG_RELEASE" = "x1"; then
+		CFLAGS="${CFLAGS} -g"
+	fi
+	for doc in $docs; do
+		sed 's/$/\r/' <"$doc" >"$PKGDIR/${doc}.txt"
+	done
+	
+	./configure \
+		--prefix='C:\\Program Files\\BFGMiner\\' \
+		CFLAGS="${CFLAGS} -Wall" \
+		--disable-cpumining \
+		--enable-opencl \
+		--enable-adl \
+		--enable-bitforce \
+		--enable-icarus \
+		--enable-modminer \
+		--enable-ztex \
+		--enable-keccak \
+		--enable-scrypt \
+		--without-system-libbase58 \
+		--host="$machine"
+	make $MAKEOPTS
+	if test "x$DEBUG_RELEASE" != "x1"; then
+		"$machine"-strip \
+			libblkmaker/.libs/*.dll \
+			libbase58/.libs/*.dll \
+			*.exe
+	fi
+	cp -vr \
+		*.exe \
+		libblkmaker/.libs/*.dll \
+		libbase58/.libs/*.dll \
+		opencl \
+		example.conf \
+		windows-build.txt \
+		miner.php \
+		"$PKGDIR/"
+	mkdir "$PKGDIR/bitstreams"
+	
+	ls "$PKGDIR" | grep '\.\(exe\|dll\)$' |
+	 perl -e '
+		use strict;
+		use warnings;
+		use File::Basename;
+		use File::Glob;
+		
+		my ($PKGDIR, $machine) = @ARGV;
+		my @todo = map { chomp; $_ } <STDIN>;
+		my %have = map { lc $_=>undef } (@todo, qw(
+			advapi32.dll
+			crypt32.dll
+			imagehlp.dll
+			kernel32.dll
+			msvcrt.dll
+			setupapi.dll
+			shell32.dll
+			user32.dll
+			winmm.dll
+			ws2_32.dll
+			wsock32.dll
+		));
+		# Optional/dlopen libs
+		push @todo, qw(
+			backtrace.dll
+			libhidapi-0.dll
+			libfootest.dll
+		);
+		sub ciexist {
+			my ($f) = @_;
+			my $lcf = lc $f;
+			for my $match (File::Glob::bsd_glob("${f}*", File::Glob::GLOB_CSH | File::Glob::GLOB_NOCASE)) {
+				my $matchlc = lc $match;
+				if ($matchlc eq $lcf) {
+					return basename($match);
+				}
+			}
+			undef
+		}
+		sub copydll {
+			my ($dlllc, $opt) = @_;
+			my $dll;
+			my $libdir;
+			for my $check_libdir (
+				"/usr/$machine/usr/lib",
+				"/usr/$machine/usr/bin",
+			) {
+				$dll = ciexist "$check_libdir/${dlllc}";
+				if ($dll) {
+					$libdir = $check_libdir;
+					last
+				}
+			}
+			if (not defined $libdir) {
+				return if $opt;
+				die "Cannot find $dlllc\n"
+			}
+			system("cp -v -L \"$libdir/$dll\" \"$PKGDIR\"") && die "Copy $dll failed\n";
+			system("\"${machine}-strip\" \"$PKGDIR/$dll\"") && die "Strip $dll failed\n";
+			push @todo, $dll;
+			$have{$dlllc} = undef;
+			1
+		}
+		while (my $c = shift @todo) {
+			if (not ciexist "$PKGDIR/$c") {
+				copydll $c, 1;
+				# copydll will add it to @todo again if found
+				next
+			}
+			
+			my $found;
+			print("Processing dependencies for ${c}...\n");
+			my $objdump = `"${machine}-objdump" -p "${PKGDIR}/${c}"`;
+			while ($objdump =~ /\G(?:\n|.)*?^\s*DLL Name\:\s*(.*)$/mg) {
+				my $dlllc = lc $1;
+				++$found;
+				next if exists $have{$dlllc};
+				
+				copydll $dlllc;
+			}
+			die "Failed to objdump $c\n" unless $found;
+		}
+' "$PKGDIR" "$machine"
+	
+	make clean
+	cd "$PKGDIR/.."
+	zip -r "$OUTDIR/$PKGNAME.zip" "$PKGNAME"
+done
 cd "$IDIR"

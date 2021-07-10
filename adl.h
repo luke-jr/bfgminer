@@ -1,11 +1,13 @@
-#ifndef __ADL_H__
-#define __ADL_H__
+#ifndef BFG_ADL_H
+#define BFG_ADL_H
 #ifdef HAVE_ADL
-bool adl_active;
-bool opt_reorder;
-int opt_hysteresis;
-const int opt_targettemp;
-const int opt_overheattemp;
+
+#include <stdbool.h>
+
+extern bool adl_active;
+extern bool opt_reorder;
+extern const int opt_targettemp;
+extern const int opt_overheattemp;
 void init_adl(int nDevs);
 float gpu_temp(int gpu);
 int gpu_engineclock(int gpu);

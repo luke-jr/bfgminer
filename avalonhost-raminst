@@ -1,0 +1,49 @@
+#!/bin/sh
+# Copyright 2013 Luke Dashjr
+#
+# This program is free software; you can redistribute it and/or modify it under
+# the terms of the GNU General Public License as published by the Free Software
+# Foundation; either version 3 of the License, or (at your option) any later
+# version.  See COPYING for more details.
+
+set -e
+if test "$#" -lt 2; then
+	echo "Usage: $0 <bfgminer-version> <temporary-packages...>"
+	echo "Example: $0 testing bfgminer screen"
+	echo "Installs <temporary-packages> to RAM, on an Avalon-host router"
+	echo "Version can be 'stable', 'testing', or any 3-digit version; eg '3.1.0'"
+	echo "Do NOT attempt to reverse (uninstall) except by rebooting"
+	echo "Do NOT attempt to use this script more than once per boot"
+	exit 1
+fi
+die() {
+	echo "$@"
+	echo 'ABORTING'
+	exit 1
+}
+if ! grep TL-WR703N /proc/cpuinfo; then
+	die 'This doesn'\''t seem to be an Avalon host system'
+fi
+if test "$USER" != "root"; then
+	die "Must be run as root"
+fi
+echo "WARNING: If anything fails other than opkg and crontab, reboot ASAP"
+source /lib/functions.sh
+mkdir -p /tmp/root/.oldroot
+mount -o noatime,lowerdir=/rom,upperdir=/tmp/root -t overlayfs "overlayfs:/tmp/root" /mnt
+pivot /mnt /.oldroot
+mount -o noatime,move /.oldroot/rom /rom
+sed -i 's/\(^option[[:space:]]\+overlay_root[[:space:]]\+\).*//;T;d' /etc/opkg.conf
+{
+	echo 'option overlay_root /'
+	echo "src/gz bfgminer http://luke.dashjr.org/programs/bitcoin/files/bfgminer/$1/openwrt/12.09/ar71xx"
+} >> /etc/opkg.conf
+shift
+set +e
+opkg update
+opkg install "$@"
+crontab -r  # disabled cgminer-monitor
+set -e
+mount -o noatime,lowerdir=/,upperdir=/overlay -t overlayfs "overlayfs:/overlay" /mnt
+pivot /mnt /.oldroot
+mount -o noatime,move /.oldroot/rom /rom

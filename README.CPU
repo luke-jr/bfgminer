@@ -1,0 +1,45 @@
+EXECUTIVE SUMMARY ON CPU USAGE:
+
+By default, BFGMiner will NOT mine on CPUs unless it is explicitly compiled with
+support and told to do so. CPU mining for bitcoin is generally considered to be
+obsolete as it requires considerably more power per hash computed than either
+GPU, FPGA or ASIC based mining. If you still wish to mine using CPUs you will
+need to build a custom binary with support enabled (refer to the build notes in
+README for further information).
+
+The following CPU mining options are available:
+
+--algo <arg>        Specify sha256 implementation for CPU mining:
+        fastauto*       Quick benchmark at startup to pick a working algorithm
+        auto            Benchmark at startup and pick fastest algorithm
+        c               Linux kernel sha256, implemented in C
+        4way            tcatm's 4-way SSE2 implementation
+        via             VIA padlock implementation
+        cryptopp        Crypto++ C/C++ implementation
+        cryptopp_asm32  Crypto++ 32-bit assembler implementation
+        sse2_32         SSE2 32 bit implementation for i386 machines
+        sse2_64         SSE2 64 bit implementation for x86_64 machines
+        sse4_64         SSE4.1 64 bit implementation for x86_64 machines
+        altivec_4way    Altivec implementation for PowerPC G4 and G5 machines
+--cpu-threads <arg> Number of miner CPU threads (default: -1)
+
+CPU FAQ:
+
+Q: What happened to CPU mining?
+A: Being increasingly irrelevant for most users, and a maintenance issue, it is
+no longer under active development and will not be supported unless someone
+steps up to help maintain it. No binary builds supporting CPU mining will be
+released for Windows but CPU mining can be built into BFGMiner when it is
+compiled. For builds which do support CPU mining, it is still disabled by
+default, and must be enabled using the -S cpu:auto option.
+
+Q: So, should I even try CPU mining?
+A: No, it honestly will waste more power and time than it is worth at this stage.
+If you really wish to mine, you are better off getting a suitable ASIC instead.
+
+Q: But, if the computers aren't mine and I'm not paying for the power?
+A: If you are trying to use computers that aren't yours, you really should
+reconsider. Attempting to mine with a large number of devices will often impact
+negatively on many pools and will likely pay almost nothing due to the small
+number of successful shares submitted. Apart from that, you will probably get
+into trouble with someone down the track for misusing the computers.

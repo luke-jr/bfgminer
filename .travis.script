@@ -1,0 +1,22 @@
+test "x$1" = "xI-am-okay-with-destroying-my-system" || exit 1
+set -ex
+
+if [ -n "$CROSS_BINPKGS" ]; then
+	CROSS_BINPKGS="${CROSS_BINPKGS/+*/}"
+	myCC="${CROSS_BINPKGS}-gcc"
+	CC_ARGS="-I/usr/${CROSS_BINPKGS}/usr/include"
+	export LDFLAGS="-L/usr/${CROSS_BINPKGS}/usr/lib -L/usr/${CROSS_BINPKGS}/usr/bin"
+	export PKG_CONFIG_PATH="/usr/${CROSS_BINPKGS}/usr/lib/pkgconfig/"
+	export PKG_CONFIG_SYSROOT_DIR="/usr/${CROSS_BINPKGS}"
+fi
+
+export CC="$(which "$myCC") $CC_ARGS"
+$CC --version
+
+./autogen.sh
+./configure $GLOBAL_CONFIGURE_ARGS $CONFIGURE_ARGS
+make CFLAGS="$GLOBAL_CFLAGS $BUILD_CFLAGS" $MAKEOPTS
+if [ -z "$CROSS_BINPKGS" ]; then
+	make check
+	sudo make install
+fi

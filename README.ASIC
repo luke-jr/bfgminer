@@ -1,0 +1,495 @@
+SUPPORTED DEVICES
+
+Currently supported ASIC devices include Avalon, Bitfountain's Block Erupter
+series (both USB and blades), a large variety of Bitfury-based miners,
+Bitmain's Antminer S5 and U1-3, Butterfly Labs' SC range of devices, HashBuster
+boards, GekkoScience's Compac USB stick, Klondike modules, and KnCMiner's
+Mercury, Jupiter and Saturn.
+
+
+ANTMINER S1-S5
+--------------
+
+BFGMiner must be compiled for and run on the embedded controller. When
+configuring, use the --enable-bitmain option to build the 'bitmain' driver used
+to interface with this hardware. None of the device attributes are autodetected
+at this time, so you must also tell BFGMiner this at runtime with a series of
+--set options. For example:
+
+-S bitmain:auto --set btm:model=S5 --set btm:layout=32:8 --set btm:timeout=3
+--set btm:clock=350 --set btm:reg_data=0d82 --set btm:voltage=x0725
+
+Note that reg_data is optional for S4 and S5 and will be calculated from clock
+if not provided.
+
+The meaning of each of these options are not documented individually at this
+time, but can be determined from the stock cgminer's options. You want to look
+at the "bitmain-options" from the command line, and the "bitmain-freq" and
+"bitmain-voltage" in the /config/cgminer.conf file.
+In this case, they were:
+
+NOTE: These are NOT valid BFGMiner options!
+    --bitmain-options 115200:32:8:7:200:0782:0725
+                             |    | |   |    ^^^^ voltage
+                             |    | |   ^^^^ reg_data
+                             |    | ^^^ clock
+                             |    ^ timeout
+                             ^^^^ layout
+    "bitmain-freq" : "3:350:0d82",
+                      | |   ^^^^ reg_data
+                      | ^^^ clock
+                      ^ timeout
+    "bitmain-voltage" : "0725"
+                         ^^^^ voltage
+
+Notice how there are duplicate settings for timeout, clock, reg_data, and
+voltage. You can probably use either one, but the 350 MHz clock performs
+better than the 200 MHz clock. You shouldn't mix and match the
+timeout/clock/reg_data combinations, however!
+
+Additionally, since the controllers are underpowered for these devices, you may
+need to experiment with a good queue setting to control how much work BFGMiner
+tries to pre-prepare for it. A reasonable starting place is:
+
+--queue 8192
+
+
+ALCHEMIST
+---------
+This driver requires the latest FPGA firmware flashed on the blades (stock
+firmware has major bug and won't run properly with this driver). For
+instructions, please visit: https://litecointalk.org/?topic=27370
+The driver has been designed to run each of the 8 blades inside an AlcheMist
+256 as a separate miner. To detect all the blades you need to manually probe it
+with the following serial ports:
+
+-S ALC:all -S ALC:/dev/ttyO1 -S ALC:/dev/ttyO2 -S ALC:/dev/ttyO3
+-S ALC:/dev/ttyO4
+
+(the four ttyUSB ports are auto detected by all)
+
+The driver supports custom frequency settings in the range of 200-400 MHz in 16
+MHz increments (driver will default to 352 MHz if these conditions are not met).
+Frequency is set with the following --set option:
+
+--set ALC:clock=336
+
+You can also set the frequency per board by specifying the tty port:
+
+--set ALC@/dev/ttyO3:clock=352
+
+Driver also supports running blades off a Raspberry Pi directly or with USB Dongles. For a single blade off a raspberry Pi make sure you have configured GPIO pin 25 correctly (see below) and scan via
+-S ALC:/dev/ttyAMA0
+
+echo 25 > /sys/class/gpio/export
+echo out > /sys/class/gpio/gpio25/direction
+
+for multiple blades using USB Dongles connected to a pi make sure the reset pin on the alcheminer board is connected to the RTS/DTR pin on the dongle board, and option --set
+ALC:mode=1 added to startup command line.
+
+
+ANTMINER U3
+-----------
+
+The U3 does not support autodetection, so you will want to use --scan-serial to
+manually probe it. For example, to scan all devices, you can use:
+
+-S antminer:all --set antminer:chip=BM1382
+
+Additionally, for optimal performance you will need to set voltage, clock, and
+timing. Voltage format for the U3 is not documented by the manufacturer, thus
+must be provided as hexadecimal configuration codes. Timing is provided in the
+number of nanoseconds each hash takes at the given configuration. A
+known-working configuration is:
+
+--set antminer:voltage=x800 --set antminer:clock=237.5
+--set antminer:timing=0.022421
+
+To set different frequency and voltage settings for multiple U3 miners on a
+single BFGMiner process use:
+
+--set antminer@\\.\COM10:voltage=xNNNN
+
+or
+
+--set antminer@/dev/ttyUSB1:voltage=xNNNN
+
+Another option is to program the CP2102 chip so they have unique serial numbers;
+this method would avoid problems with the device showing up on different tty/COM
+locations after reboot/hotplug:
+
+/cp210x-program -w -F eeprom-content.AntU3-custom.hex --set-product-string='Antminer U3' --set-serial-number=myveryown0001
+
+Then you can use --set antminer@myveryown0001:voltage=xNNNN
+
+
+AVALON 1
+--------
+
+Currently, Avalon boards are best supported by connecting them directly (or via
+a hub) to a regular PC running BFGMiner. It is also possible to install the
+OpenWrt packages of BFGMiner to the Avalon's embedded controller, but this is
+not a simple task due to its lack of available flash space.
+
+To use the Avalon from a regular PC, you will need to specify two options:
+First, add the -S option specifying the avalon driver specifically. For example,
+
+-S avalon:\\.\COM9
+
+Next, use the --set-device option to provide the device configuration.
+If you are translating options from --avalon-options (cgminer and older versions
+of BFGMiner), note the values are baud:miner_count:asic_count:timeout:clock.
+
+    baud=N         The device is essentially hard coded to emulate 115200 baud,
+                   so you shouldn't change this.
+    miner_count=N  Most Avalons are 3 module devices, which come to 24 miners.
+                   4 module devices would use 32 here.
+    asic_count=N   Virtually all have 10, so don't change this.
+    timeout=N      This defines how long the device will work on a work item
+                   before accepting new work to replace it. It should be changed
+                   according to the frequency (last setting). It is possible to
+                   set this a little lower if you are trying to tune for short
+                   block mining (eg p2pool) but much lower and the device will
+                   start creating duplicate shares.
+    clock=N        This is the clock speed of the devices. Only specific values
+                   work: 256, 270, 282 (default), 300, 325, 350 and 375.
+
+Sample settings for valid different frequencies (last 2 values):
+34:375
+36:350
+39:325
+43:300
+45:282
+47:270
+50:256
+
+
+AVALON 2/3
+----------
+
+Avalon 2/3 units communicate with a UART, usually attached to your host via a
+generic USB UART adapter. Therefore, you will need to manually probe the correct
+UART device with the -S option:
+
+-S avalonmm:\\.\COM22
+
+Next, use the --set option to configure at least your desired clock frequency
+and voltage.
+
+Avalon 2: --set avalonmm:clock=1500 --set avalonmm:voltage=1
+Avalon 3: --set avalonmm:clock=450 --set avalonmm:voltage=0.6625
+
+You may also want to set the fan speed, which is specified as a percentage:
+
+--set avalonmm:fan=95
+
+
+BFSB, MEGABIGPOWER, AND METABANK BITFURY BOARDS
+-----------------------------------------------
+
+Both BFSB and MegaBigPower (V2 only at this time) boards are supported with the
+"bfsb" driver. Metabank boards are supported with the "metabank" driver. These
+drivers are not enabled by default, since they must be run on a Raspberry Pi in
+a specific hardware configuration with the boards. To enable them, you must
+build with --enable-bfsb or --enable-metabank. Do not try to use these drivers
+without the manufacturer-supported hardware configuration! Also note that these
+drivers do not properly support thermal shutdown at this time, and without
+sufficient cooling you may destroy your board or chips!
+
+To start BFGMiner, ensure your Raspberry Pi's SPI is enabled (you can run the
+raspi-config utility for this). For Metabank boards, you must also load the I2C
+drivers (do not try to modprobe both with a single command; it won't work):
+    modprobe i2c-bcm2708
+    modprobe i2c-dev
+Then you must run BFGMiner as root, with the proper driver selected.
+For example:
+    sudo bfgminer -S bfsb:auto
+
+
+BFx2
+----
+
+You will need to install the WinUSB driver instead of the default FTDI serial
+driver. The easiest way to do this is using Zadig: http://zadig.akeo.ie/
+
+Note that since it's impossible to tell the BFx2 apart from various other
+devices (including BFL/Cairnsmore1 miners and even many non-mining devices!),
+you must run with the -S bfx:all option (or 'bfx:all' at the M+ menu).
+
+I do not know what this will do with other devices; it may start fires,
+launch nuclear missiles (please don't run BFGMiner on computers with
+missile controls), etc.
+
+
+BI*FURY
+-------
+
+Bi*Fury should just work; you may need to use -S bifury:<path>
+
+On Windows, you will need to install the standard USB CDC driver for it.
+    http://store.bitcoin.org.pl/support
+
+If you want to upgrade the firmware, unplug your device. You will need to
+temporarily short a circuit. With the USB connector pointing forward, and the
+heatsink down, look to the forward-right; you will see two tiny lights, a set of
+2 terminals, and a set of 3 terminals. The ones you need to short are the set of
+2. With them shorted, plug the device back into your computer. It will then
+pretend to be a mass storage disk drive. If you use Windows, you can play along
+and just overwrite the firmware.bin file. If you use Linux, you must use mcopy:
+    mcopy -i /dev/disk/by-id/usb-NXP_LPC1XXX_IFLASH_ISP-0:0 firmware.bin \
+        ::/firmware.bin
+After this is complete, unplug the device again and un-short the 2 terminals.
+This completes the upgrade and you can now plug it back in and start mining.
+
+
+BIG PICTURE MINING BITFURY USB
+------------------------------
+
+These miners are sensitive to unexpected data. Usually you can re-plug them to
+reset to a known-good initialisation state. To ensure they are properly detected
+and used with BFGMiner, you must specify -S bigpic:all (or equivalent) options
+prior to any other -S options (which might probe the device and confuse it).
+
+
+BLOCK ERUPTER BLADE
+-------------------
+
+Blades communicate over Ethernet using the old but simple getwork mining
+protocol. If you build BFGMiner with libmicrohttpd, you can have it work with
+one or more blades. First, start BFGMiner with the --http-port option. For
+example:
+    bfgminer --http-port 8330
+Then configure your blade to connect to your BFGMiner instance on the same port,
+with a unique username per blade. It will then show up as a PXY device and
+should work more or less like any other miner.
+
+
+BLOCK ERUPTER USB
+-----------------
+
+These will autodetect if supported by the device; otherwise, you need to use
+the '--scan-serial erupter:<device>' option to tell BFGMiner what device to
+probe; if you know you have no other serial devices, or only ones that can
+tolerate garbage, you can use '--scan-serial erupter:all' to probe all serial
+ports. They communicate with the Icarus protocol, which has some additional
+options in README.FPGA
+
+
+COMPAC
+------
+
+These USB sticks are based on Bitmain's BM1384 chip, and use the antminer
+driver. You can set the clock frequency with
+
+--set compac:clock=200
+
+You can also adjust the clock real-time while the stick is hashing using RPC's pgaset:
+
+bfgminer-rpc "pgaset|0,clock,x0982"
+                     |       ^^^^^ hex frequency
+                     ^ device number
+
+
+HEX*FURY
+--------
+
+Hex*Fury uses the bifury driver. Miners using earlier boards may need to
+workaround bugs in the firmware:
+    bfgminer --set bifury:chips=6 --set bifury:free_after_job=no
+This may cause poor behaviour or performance from other bifury-based devices.
+If you encounter this, you can set the workarounds per-device by using their
+serial number (which can be seen in the TUI device manager; in this example,
+141407160211cdf):
+    bfgminer --set bifury@141407160211cdf:chips=15 ...
+
+
+KLONDIKE
+--------
+
+--klondike-options <arg> Set klondike options clock:temptarget
+
+
+KNCMINER (Jupiter)
+--------
+
+KnCMiner rigs use a BeagleBone Black (BBB) as the host; this is pluged into a
+"cape" with a FPGA and connections for 4-6 ASIC modules (depending on the cape
+version). Note that in addition to the usual dependencies, this driver also
+requires i2c-tools (aka libi2c-dev on some systems). The BBB comes with the
+Ångström Distribution by default. The following is a step by step install for
+BFGMiner on this system;
+
+-----------------Start------------
+cat >/etc/opkg/feeds.conf <<\EOF
+src/gz noarch http://feeds.angstrom-distribution.org/feeds/v2013.06/ipk/eglibc/all/
+src/gz base http://feeds.angstrom-distribution.org/feeds/v2013.06/ipk/eglibc/armv7ahf-vfp-neon/base/
+src/gz beaglebone http://feeds.angstrom-distribution.org/feeds/v2013.06/ipk/eglibc/armv7ahf-vfp-neon/machine/beaglebone/
+EOF
+
+opkg update
+opkg install angstrom-feed-configs
+rm /etc/opkg/feeds.conf
+opkg update
+
+opkg install update-alternatives
+opkg install automake autoconf make gcc cpp binutils git less pkgconfig-dev ncurses-dev libtool nano bash i2c-tools-dev
+while ! opkg install libcurl-dev; do true; done
+
+curl http://www.digip.org/jansson/releases/jansson-2.0.1.tar.bz2 | tar -xjvp
+cd jansson-2.0.1
+./configure --prefix=/usr CC=arm-angstrom-linux-gnueabi-gcc --disable-static NM=arm-angstrom-linux-gnueabi-nm
+make install && ldconfig
+cd ..
+
+git clone git://github.com/luke-jr/bfgminer
+cd bfgminer
+./autogen.sh
+git clone git://github.com/troydhanson/uthash
+./configure --host=arm-angstrom-linux-gnueabi --enable-knc --disable-other-drivers CFLAGS="-I$PWD/uthash/src"
+make AR=arm-angstrom-linux-gnueabi-ar
+
+/etc/init.d/cgminer.sh stop
+./bfgminer -S knc:auto -c /config/cgminer.conf
+
+---------------END-------------
+
+KNCMINER (Titan)
+--------
+
+Titan uses RaspberryPi as a controller.
+
+Build instructions:
+-----------------Start------------
+
+git clone git@github.com:KnCMiner/bfgminer.git
+cd bfgminer
+./autogen.sh
+./configure --enable-scrypt --disable-sha256d --enable-titan --disable-other-drivers
+make
+sudo /etc/init.d/bfgminer.sh restart
+screen -r
+
+---------------END-------------
+
+MONARCH
+-------
+
+The Butterfly Labs Monarch devices can be used as either USB devices, or in a
+PCI-Express slot. As USB devices, they are essentially plug-and-play. If you
+wish to use them via PCI-Express, however, you must first load the proper
+driver. BFGMiner can work with either Linux uio (2.6.23+, requires root access)
+or Linux vfio (3.6+, requires IOMMU support).
+
+To enable uio on your cards, you may need to do:
+    sudo modprobe uio_pci_generic
+    echo 1cf9 0001 | sudo tee /sys/bus/pci/drivers/uio_pci_generic/new_id
+
+Enabling vfio is similar, but allows you to run BFGMiner without root
+privileges. Since setting this up is more complicated, BFGMiner includes a
+setup-vfio script (which must be run with root permissions). Simply run:
+    sudo setup-vfio --unsafe --user $(whoami) 1cf9 0001
+You will be asked about each Monarch found, and must answer 'yes' to each one.
+
+If you wish to manually setup VFIO, follow these steps:
+First, load the kernel module:
+    sudo modprobe vfio-pci
+Next, identify what the device ids are for your card(s):
+    lspci -D | grep 1cf9  # the first number of each line is the device id
+From that, you can identify its IOMMU group, and list all devices sharing that
+group:
+    readlink "/sys/bus/pci/devices/$DEVICE_ID/iommu_group"
+    ls "/sys/kernel/iommu_groups/$IOMMU_GROUP_ID/devices/"
+All of the devices listed (other than the Monarch), if any, will need to be
+disabled and unbound! To do that, use:
+    echo "$DEVICE_ID" | sudo tee "/sys/bus/pci/devices/$DEVICE_ID/driver/unbind"
+    echo "$DEVICE_CODE" | sudo tee /sys/bus/pci/drivers/vfio-pci/new_id
+Note that $DEVICE_ID should be something like "0000:01:00.0" and $DEVICE_CODE is
+something like "1cf9 0001" (this example is the Monarch itself).
+If you want to run BFGMiner as a normal user:
+    chown "$USERNAME" "/dev/vfio/$IOMMU_GROUP_ID"
+Depending on your system, you may also need to do:
+    echo 1 | sudo tee /sys/module/vfio_iommu_type1/parameters/allow_unsafe_interrupts
+
+
+ONESTRINGMINER
+--------------
+
+OneStringMiner boards use the bifury driver. Miners using earlier boards may
+need to workaround bugs in the firmware:
+    bfgminer --set bifury:chips=15 --set bifury:free_after_job=no
+If you have different devices using the bifury driver, see the section on
+Hex*Fury for applying workarounds per-device.
+
+
+GRIDSEED
+--------
+
+Gridseed units, at the present time, come in two versions: Blade - a 40 chip
+unit and Orb - a 5 chip unit. Orb units can be used to mine both SHA256d and
+scrypt based coins whereas the Blade is scrypt only, although BFGMiner only
+supports scrypt mode at this time.
+
+BFGMiner allows a miner to connect both types of units to a single miner
+instance and provides for granular control of the clock frequencies for each
+device and each chip on each device. The basic use of this feature is to use the
+--set option on from the command line:
+
+bfgminer --scrypt -S gridseed:all --set gridseed@<serial_number>:clock=825
+
+for multiple devices, add multiple --set arguments.
+
+Additionally, these can be added to the bfgminer.conf file for persistence like
+this:
+
+"set" : [
+        "gridseed@<serial_number>:clock=825",
+        "gridseed@<serial_number>:clock=850",
+        "gridseed@<serial_number>:clock=875"
+]
+
+To find the device serial number, start bfgminer and press <M> to manage
+devices, then <Page Down> or <down arrow> through the list of devices and take
+note of the device serial number in the device information shown.
+
+...
+Select processor to manage using up/down arrow keys
+ GSD 0a:       |  74.4/ 72.9/ 10.2kh/s | A:  1 R:0+0(none) HW:0/none
+  STM32 Virtual COM Port from STMicroelectronics
+Serial: 6D85278F5650
+Clock speed: 875
+...
+
+So for example, an entry would look like this:
+        gridseed@6D85278F5650:clock=875
+
+
+ZEUSMINER
+---------
+
+Zeusminers do not support autodetection, so you will need to use --scan to probe
+for them:
+
+-S zeusminer:\\.\COM3
+
+You should also configure the driver for your specific device:
+
+    --set zeusminer:clock=N        Clock frequency (default: 328)
+    --set zeusminer:chips=N        Number of chips per device
+        Blizzard    :  6          Cyclone     :  96
+        Hurricane X2: 48 (2*24)   Hurricane X3:  64 (2*32)
+        Thunder   X2: 96 (4*24)   Thunder   X3: 128 (4*32)
+Note: if you set this option incorrectly, the device may underperform and/or
+      misreport hashrate.
+
+For example:
+
+bfgminer --scrypt -o stratum+tcp://pool:port -u user -p pass -S zeusminer:\\.\COM3 --set zeusminer:clock=328 --set zeusminer:chips=128
+
+---
+
+This code is provided entirely free of charge by the programmer in his spare
+time so donations would be greatly appreciated. Please consider donating to the
+address below.
+
+Luke-Jr <luke-jr+bfgminer@utopios.org>
+1QATWksNFGeUJCWBrN4g6hGM178Lovm7Wh

@@ -1,5 +1,6 @@
-// Copyright (c) 2010 Satoshi Nakamoto
-// Copyright (c) 2011 Gilles Risch
+// Copyright 2010 Satoshi Nakamoto
+// Copyright 2011 Gilles Risch
+// Copyright 2012-2013 Luke Dashjr
 // Distributed under the MIT/X11 software license, see the accompanying
 // file license.txt or http://www.opensource.org/licenses/mit-license.php.
 
@@ -9,10 +10,13 @@
 //
 
 
+#include "config.h"
+
 #include "driver-cpu.h"
 
 #ifdef WANT_ALTIVEC_4WAY
 
+#include <stdbool.h>
 #include <string.h>
 #include <assert.h>
 
@@ -73,13 +77,17 @@ static const unsigned int pSHA256InitState[8] =
 {0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a, 0x510e527f, 0x9b05688c, 0x1f83d9ab, 0x5be0cd19};
 
 
-bool ScanHash_altivec_4way(struct thr_info*thr, const unsigned char *pmidstate,
-	unsigned char *pdata,
-	unsigned char *phash1, unsigned char *phash,
-	const unsigned char *ptarget,
+bool ScanHash_altivec_4way(struct thr_info * const thr, struct work * const work,
 	uint32_t max_nonce, uint32_t *last_nonce,
 	uint32_t nonce)
 {
+	const uint8_t * const pmidstate = work->midstate;
+	uint8_t *pdata = work->data;
+	uint8_t hash1[0x40];
+	memcpy(hash1, hash1_init, sizeof(hash1));
+	uint8_t * const phash = work->hash;
+	
+	uint32_t *hash32 = (uint32_t *)phash;
     unsigned int *nNonce_p = (unsigned int*)(pdata + 76);
 
 	pdata += 64;
@@ -102,12 +110,13 @@ bool ScanHash_altivec_4way(struct thr_info*thr, const unsigned char *pmidstate,
                 for (i = 0; i < 32/4; i++)
                     ((unsigned int*)phash)[i] = thash[i][j];
 
-		if (fulltest(phash, ptarget)) {
+				if (unlikely(hash32[7] == 0))
+				{
 					nonce += j;
 					*last_nonce = nonce;
 					*nNonce_p = nonce;
 					return true;
-		}
+				}
             }
         }
 

@@ -1,13 +1,17 @@
-// Copyright (c) 2010 Satoshi Nakamoto
+// Copyright 2012-2013 Luke Dashjr
+// Copyright 2010 Satoshi Nakamoto
 // Distributed under the MIT/X11 software license, see the accompanying
 // file license.txt or http://www.opensource.org/licenses/mit-license.php.
 
 // tcatm's 4-way 128-bit SSE2 SHA-256
 
+#include "config.h"
+
 #include "driver-cpu.h"
 
 #ifdef WANT_SSE2_4WAY
 
+#include <stdbool.h>
 #include <string.h>
 #include <assert.h>
 
@@ -17,7 +21,7 @@
 
 #define NPAR 32
 
-static void DoubleBlockSHA256(const void* pin, void* pout, const void* pinit, unsigned int hash[8][NPAR], const void* init2);
+static void DoubleBlockSHA256(const void* pin, const void* pout, const void* pinit, unsigned int hash[8][NPAR], const void* init2);
 
 static const unsigned int sha256_consts[] = {
     0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, /*  0 */
@@ -47,11 +51,11 @@ static inline __m128i Maj(const __m128i b, const __m128i c, const __m128i d) {
     return _mm_xor_si128(_mm_xor_si128(_mm_and_si128(b,c),_mm_and_si128(b,d)),_mm_and_si128(c,d));
 }
 
-static __attribute__((always_inline)) __m128i  ROTR(__m128i x, const int n) {
+static inline __m128i  ROTR(__m128i x, const int n) {
     return _mm_or_si128(_mm_srli_epi32(x, n),_mm_slli_epi32(x, 32 - n));
 }
 
-static  __attribute__((always_inline))  __m128i SHR(__m128i x, const int n) {
+static inline __m128i SHR(__m128i x, const int n) {
     return _mm_srli_epi32(x, n);
 }
 
@@ -63,18 +67,6 @@ static  __attribute__((always_inline))  __m128i SHR(__m128i x, const int n) {
 #define SIGMA0_256(x)       (_mm_xor_si128(_mm_xor_si128(ROTR((x), 7),ROTR((x), 18)), SHR((x), 3 )))
 #define SIGMA1_256(x)       (_mm_xor_si128(_mm_xor_si128(ROTR((x),17),ROTR((x), 19)), SHR((x), 10)))
 
-static inline unsigned int store32(const __m128i x, int i) {
-    union { unsigned int ret[4]; __m128i x; } box;
-    box.x = x;
-    return box.ret[i];
-}
-
-static inline void store_epi32(const __m128i x, unsigned int *x0, unsigned int *x1, unsigned int *x2, unsigned int *x3) {
-    union { unsigned int ret[4]; __m128i x; } box;
-    box.x = x;
-    *x0 = box.ret[3]; *x1 = box.ret[2]; *x2 = box.ret[1]; *x3 = box.ret[0];
-}
-
 #define add4(x0, x1, x2, x3) _mm_add_epi32(_mm_add_epi32(x0, x1),_mm_add_epi32( x2,x3))
 #define add5(x0, x1, x2, x3, x4) _mm_add_epi32(add4(x0, x1, x2, x3), x4)
 
@@ -83,30 +75,20 @@ static inline void store_epi32(const __m128i x, unsigned int *x0, unsigned int *
 d = _mm_add_epi32(d, T1);                                           \
 h = _mm_add_epi32(T1, _mm_add_epi32(BIGSIGMA0_256(a), Maj(a, b, c)));
 
-static inline void dumpreg(__m128i x, char *msg) {
-    union { unsigned int ret[4]; __m128i x; } box;
-    box.x = x ;
-    printf("%s %08x %08x %08x %08x\n", msg, box.ret[0], box.ret[1], box.ret[2], box.ret[3]);
-}
-
-#if 1
-#define dumpstate(i) printf("%s: %08x %08x %08x %08x %08x %08x %08x %08x %08x\n", \
-        __func__, store32(w0, i), store32(a, i), store32(b, i), store32(c, i), store32(d, i), store32(e, i), store32(f, i), store32(g, i), store32(h, i));
-#else
-#define dumpstate()
-#endif
-
 static const unsigned int pSHA256InitState[8] =
 {0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a, 0x510e527f, 0x9b05688c, 0x1f83d9ab, 0x5be0cd19};
 
 
-bool ScanHash_4WaySSE2(struct thr_info*thr, const unsigned char *pmidstate,
-	unsigned char *pdata,
-	unsigned char *phash1, unsigned char *phash,
-	const unsigned char *ptarget,
+bool ScanHash_4WaySSE2(struct thr_info * const thr, struct work * const work,
 	uint32_t max_nonce, uint32_t *last_nonce,
 	uint32_t nonce)
 {
+	const uint8_t * const pmidstate = work->midstate;
+	uint8_t *pdata = work->data;
+	const uint32_t * const phash1 = hash1_init;
+	uint8_t * const phash = work->hash;
+	
+	uint32_t *hash32 = (uint32_t *)phash;
     unsigned int *nNonce_p = (unsigned int*)(pdata + 76);
 
 	pdata += 64;
@@ -116,7 +98,6 @@ bool ScanHash_4WaySSE2(struct thr_info*thr, const unsigned char *pmidstate,
         unsigned int thash[9][NPAR] __attribute__((aligned(128)));
 	int j;
 
-	nonce += NPAR;
 	*nNonce_p = nonce;
 
         DoubleBlockSHA256(pdata, phash1, pmidstate, thash, pSHA256InitState);
@@ -130,12 +111,13 @@ bool ScanHash_4WaySSE2(struct thr_info*thr, const unsigned char *pmidstate,
                 for (i = 0; i < 32/4; i++)
                     ((unsigned int*)phash)[i] = thash[i][j];
 
-		if (fulltest(phash, ptarget)) {
+				if (unlikely(hash32[7] == 0))
+				{
 					nonce += j;
 					*last_nonce = nonce;
 					*nNonce_p = nonce;
 					return true;
-		}
+				}
             }
         }
 
@@ -144,14 +126,16 @@ bool ScanHash_4WaySSE2(struct thr_info*thr, const unsigned char *pmidstate,
             *last_nonce = nonce;
             return false;
         }
+
+		nonce += NPAR;
     }
 }
 
 
-static void DoubleBlockSHA256(const void* pin, void* pad, const void *pre, unsigned int thash[9][NPAR], const void *init)
+static void DoubleBlockSHA256(const void* pin, const void* pad, const void *pre, unsigned int thash[9][NPAR], const void *init)
 {
     unsigned int* In = (unsigned int*)pin;
-    unsigned int* Pad = (unsigned int*)pad;
+    const unsigned int* Pad = pad;
     unsigned int* hPre = (unsigned int*)pre;
     unsigned int* hInit = (unsigned int*)init;
     unsigned int /* i, j, */ k;

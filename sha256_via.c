@@ -1,6 +1,19 @@
+/*
+ * Copyright 2010-2011 Jeff Garzik
+ * Copyright 2012-2013 Luke Dashjr
+ * Copyright 2011-2012 Con Kolivas
+ *
+ * This program is free software; you can redistribute it and/or modify it
+ * under the terms of the GNU General Public License as published by the Free
+ * Software Foundation; either version 3 of the License, or (at your option)
+ * any later version.  See COPYING for more details.
+ */
+
+#include "config.h"
 
 #include "driver-cpu.h"
 
+#include <stdbool.h>
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
@@ -19,41 +32,36 @@ static void via_sha256(void *hash, void *buf, unsigned len)
 		     :"memory");
 }
 
-bool scanhash_via(struct thr_info*thr, __maybe_unused const unsigned char *pmidstate,
-	unsigned char *data_inout,
-	__maybe_unused unsigned char *phash1, __maybe_unused unsigned char *phash,
-	const unsigned char *target,
+bool scanhash_via(struct thr_info * const thr, struct work * const work,
 		  uint32_t max_nonce, uint32_t *last_nonce,
 		  uint32_t n)
 {
+	uint8_t * const data_inout = work->data;
+	
 	unsigned char data[128] __attribute__((aligned(128)));
 	unsigned char tmp_hash[32] __attribute__((aligned(128)));
 	unsigned char tmp_hash1[32] __attribute__((aligned(128)));
 	uint32_t *data32 = (uint32_t *) data;
 	uint32_t *hash32 = (uint32_t *) tmp_hash;
 	uint32_t *nonce = (uint32_t *)(data + 64 + 12);
+	uint32_t *nonce_inout = (uint32_t *)(data_inout + 64 + 12);
 	unsigned long stat_ctr = 0;
-	int i;
 
 	/* bitcoin gives us big endian input, but via wants LE,
 	 * so we reverse the swapping bitcoin has already done (extra work)
 	 * in order to permit the hardware to swap everything
 	 * back to BE again (extra work).
 	 */
-	for (i = 0; i < 128/4; i++)
-		data32[i] = swab32(((uint32_t *)data_inout)[i]);
+	swap32yes(data32, data_inout, 128/4);
 
 	while (1) {
-		n++;
 		*nonce = n;
 
 		/* first SHA256 transform */
 		memcpy(tmp_hash1, sha256_init_state, 32);
 		via_sha256(tmp_hash1, data, 80);	/* or maybe 128? */
 
-		for (i = 0; i < 32/4; i++)
-			((uint32_t *)tmp_hash1)[i] =
-				swab32(((uint32_t *)tmp_hash1)[i]);
+		swap32yes(tmp_hash1, tmp_hash1, 32/4);
 
 		/* second SHA256 transform */
 		memcpy(tmp_hash, sha256_init_state, 32);
@@ -61,15 +69,11 @@ bool scanhash_via(struct thr_info*thr, __maybe_unused const unsigned char *pmids
 
 		stat_ctr++;
 
-		if (unlikely((hash32[7] == 0) && fulltest(tmp_hash, target))) {
+		if (unlikely((hash32[7] == 0)))
+		{
 			/* swap nonce'd data back into original storage area;
-			 * TODO: only swap back the nonce, rather than all data
 			 */
-			for (i = 0; i < 128/4; i++) {
-				uint32_t *dout32 = (uint32_t *) data_inout;
-				dout32[i] = swab32(data32[i]);
-			}
-
+			*nonce_inout = bswap_32(n);
 			*last_nonce = n;
 			return true;
 		}
@@ -78,6 +82,8 @@ bool scanhash_via(struct thr_info*thr, __maybe_unused const unsigned char *pmids
 			*last_nonce = n;
 			return false;
 		}
+
+		n++;
 	}
 }
 

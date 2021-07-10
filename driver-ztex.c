@@ -1,47 +1,49 @@
-/**
- *   ztex.c - BFGMiner worker for Ztex 1.15x fpga board
+/*
+ * Copyright 2012 nelisky
+ * Copyright 2012-2014 Luke Dashjr
+ * Copyright 2012-2013 Denis Ahrens
+ * Copyright 2012 Xiangfu
  *
- *   Copyright (c) 2012 nelisky.btc@gmail.com
+ * This work is based upon the Java SDK provided by ztex which is
+ * Copyright (C) 2009-2011 ZTEX GmbH.
+ * http://www.ztex.de
  *
- *   This work is based upon the Java SDK provided by ztex which is
- *   Copyright (C) 2009-2011 ZTEX GmbH.
- *   http://www.ztex.de
- *
- *   This work is based upon the icarus.c worker which is
- *   Copyright 2012 Luke Dashjr
- *   Copyright 2012 Xiangfu <xiangfu@openmobilefree.com>
- *
- *   This program is free software; you can redistribute it and/or modify
- *   it under the terms of the GNU General Public License version 2 as
- *   published by the Free Software Foundation.
- *
- *   This program is distributed in the hope that it will be useful, but
- *   WITHOUT ANY WARRANTY; without even the implied warranty of
- *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
- *   General Public License for more details.
- *
- *   You should have received a copy of the GNU General Public License
- *   along with this program; if not, see http://www.gnu.org/licenses/.
-**/
+ * This program is free software; you can redistribute it and/or modify it
+ * under the terms of the GNU General Public License as published by the Free
+ * Software Foundation; either version 3 of the License, or (at your option)
+ * any later version.  See COPYING for more details.
+ */
+
+#include "config.h"
+
+#include <stdbool.h>
+#include <stdint.h>
+
+#include "miner.h"
 #include <unistd.h>
 #include <sha2.h>
-#include "miner.h"
+
+#include "deviceapi.h"
+#include "dynclock.h"
 #include "libztex.h"
+#include "lowlevel.h"
+#include "lowl-usb.h"
+#include "util.h"
 
 #define GOLDEN_BACKLOG 5
 
-struct device_api ztex_api;
+BFG_REGISTER_DRIVER(ztex_drv)
 
 // Forward declarations
 static void ztex_disable(struct thr_info* thr);
 static bool ztex_prepare(struct thr_info *thr);
 
-static void ztex_selectFpga(struct libztex_device* ztex)
+static void ztex_selectFpga(struct libztex_device* ztex, int16_t fpgaNum)
 {
 	if (ztex->root->numberOfFpgas > 1) {
-		if (ztex->root->selectedFpga != ztex->fpgaNum)
+		if (ztex->root->selectedFpga != fpgaNum)
 			mutex_lock(&ztex->root->mutex);
-		libztex_selectFpga(ztex);
+		libztex_selectFpga(ztex, fpgaNum);
 	}
 }
 
@@ -53,133 +55,128 @@ static void ztex_releaseFpga(struct libztex_device* ztex)
 	}
 }
 
-static void ztex_detect(void)
+static struct cgpu_info *ztex_setup(struct libztex_device *dev, int fpgacount)
 {
-	int cnt;
-	int i,j;
-	int fpgacount;
-	struct libztex_dev_list **ztex_devices;
-	struct libztex_device *ztex_slave;
 	struct cgpu_info *ztex;
+	char *fpganame = (char*)dev->snString;
 
-	cnt = libztex_scanDevices(&ztex_devices);
-	if (cnt > 0)
-		applog(LOG_WARNING, "Found %d ztex board%s", cnt, cnt > 1 ? "s" : "");
+	ztex = calloc(1, sizeof(struct cgpu_info));
+	ztex->drv = &ztex_drv;
+	ztex->device_ztex = dev;
+	ztex->procs = fpgacount;
+	ztex->threads = fpgacount;
+	ztex->dev_manufacturer = dev->dev_manufacturer;
+	ztex->dev_product = dev->dev_product;
+	ztex->dev_serial = (char*)&dev->snString[0];
+	ztex->name = fpganame;
+	add_cgpu(ztex);
+	strcpy(ztex->device_ztex->repr, ztex->dev_repr);
+	applog(LOG_INFO, "%"PRIpreprv": Found Ztex (ZTEX %s)", ztex->dev_repr, fpganame);
 
-	for (i = 0; i < cnt; i++) {
-		ztex = calloc(1, sizeof(struct cgpu_info));
-		ztex->api = &ztex_api;
-		ztex->device_ztex = ztex_devices[i]->dev;
-		ztex->threads = 1;
-		ztex->device_ztex->fpgaNum = 0;
-		ztex->device_ztex->root = ztex->device_ztex;
-		add_cgpu(ztex);
-
-		fpgacount = libztex_numberOfFpgas(ztex->device_ztex);
-
-		if (fpgacount > 1)
-			pthread_mutex_init(&ztex->device_ztex->mutex, NULL);
-
-		for (j = 1; j < fpgacount; j++) {
-			ztex = calloc(1, sizeof(struct cgpu_info));
-			ztex->api = &ztex_api;
-			ztex_slave = calloc(1, sizeof(struct libztex_device));
-			memcpy(ztex_slave, ztex_devices[i]->dev, sizeof(struct libztex_device));
-			ztex->device_ztex = ztex_slave;
-			ztex->threads = 1;
-			ztex_slave->fpgaNum = j;
-			ztex_slave->root = ztex_devices[i]->dev;
-			ztex_slave->repr[strlen(ztex_slave->repr) - 1] = ('1' + j);
-			add_cgpu(ztex);
-		}
-
-		applog(LOG_WARNING,"%s: Found Ztex (fpga count = %d) , mark as %d", ztex->device_ztex->repr, fpgacount, ztex->device_id);
-	}
-
-	if (cnt > 0)
-		libztex_freeDevList(ztex_devices);
+	return ztex;
 }
 
-static bool ztex_updateFreq(struct libztex_device* ztex)
+static
+bool ztex_lowl_match(const struct lowlevel_device_info * const info)
 {
-	int i, maxM, bestM;
-	double bestR, r;
+	return lowlevel_match_lowlproduct(info, &lowl_usb, "btcminer for ZTEX");
+}
 
-	for (i = 0; i < ztex->freqMaxM; i++)
-		if (ztex->maxErrorRate[i + 1] * i < ztex->maxErrorRate[i] * (i + 20))
-			ztex->maxErrorRate[i + 1] = ztex->maxErrorRate[i] * (1.0 + 20.0 / i);
-
-	maxM = 0;
-	while (maxM < ztex->freqMDefault && ztex->maxErrorRate[maxM + 1] < LIBZTEX_MAXMAXERRORRATE)
-		maxM++;
-	while (maxM < ztex->freqMaxM && ztex->errorWeight[maxM] > 150 && ztex->maxErrorRate[maxM + 1] < LIBZTEX_MAXMAXERRORRATE)
-		maxM++;
-
-	bestM = 0;
-	bestR = 0;
-	for (i = 0; i <= maxM; i++) {
-		r = (i + 1 + (i == ztex->freqM? LIBZTEX_ERRORHYSTERESIS: 0)) * (1 - ztex->maxErrorRate[i]);
-		if (r > bestR) {
-			bestM = i;
-			bestR = r;
-		}
-	}
-
-	if (bestM != ztex->freqM) {
-		ztex_selectFpga(ztex);
-		libztex_setFreq(ztex, bestM);
-		ztex_releaseFpga(ztex);
-	}
-
-	maxM = ztex->freqMDefault;
-	while (maxM < ztex->freqMaxM && ztex->errorWeight[maxM + 1] > 100)
-		maxM++;
-	if ((bestM < (1.0 - LIBZTEX_OVERHEATTHRESHOLD) * maxM) && bestM < maxM - 1) {
-		ztex_selectFpga(ztex);
-		libztex_resetFpga(ztex);
-		ztex_releaseFpga(ztex);
-		applog(LOG_ERR, "%s: frequency drop of %.1f%% detect. This may be caused by overheating. FPGA is shut down to prevent damage.",
-		       ztex->repr, (1.0 - 1.0 * bestM / maxM) * 100);
+static
+bool ztex_lowl_probe(const struct lowlevel_device_info * const info)
+{
+	const char * const product = info->product;
+	const char * const serial = info->serial;
+	if (info->lowl != &lowl_usb)
+	{
+		bfg_probe_result_flags = BPR_WRONG_DEVTYPE;
+		applog(LOG_DEBUG, "%s: Matched \"%s\" serial \"%s\", but lowlevel driver is not usb!",
+		       __func__, product, serial);
 		return false;
 	}
+	
+	libusb_device * const usbdev = info->lowl_data;
+	
+	const enum ztex_check_result err = libztex_checkDevice(usbdev);
+	switch (err)
+	{
+		case CHECK_ERROR:
+			applogr(false, LOG_ERR, "%s: Can not check device %s", ztex_drv.dname, info->devid);
+		case CHECK_IS_NOT_ZTEX:
+			return false;
+		case CHECK_OK:
+			break;
+		case CHECK_RESCAN:
+			bfg_need_detect_rescan = true;
+			return false;
+	}
+	
+	int fpgacount;
+	struct libztex_device *ztex_master;
+	struct cgpu_info *ztex;
+	
+	ztex_master = libztex_prepare_device2(usbdev);
+	if (!ztex_master)
+		applogr(false, LOG_ERR, "%s: libztex_prepare_device2 failed on %s", ztex_drv.dname, info->devid);
+	
+	if (bfg_claim_usb(&ztex_drv, true, ztex_master->usbbus, ztex_master->usbaddress))
+		return false;
+	ztex_master->root = ztex_master;
+	fpgacount = libztex_numberOfFpgas(ztex_master);
+	ztex_master->handles = fpgacount;
+	ztex = ztex_setup(ztex_master, fpgacount);
+
+	if (fpgacount > 1)
+		pthread_mutex_init(&ztex->device_ztex->mutex, NULL);
+	
 	return true;
 }
 
+static bool ztex_change_clock_func(struct thr_info *thr, int bestM)
+{
+	struct cgpu_info *cgpu = thr->cgpu;
+	struct libztex_device *ztex = thr->cgpu->device_ztex;
 
-static bool ztex_checkNonce(struct libztex_device *ztex,
+	ztex_selectFpga(ztex, cgpu->proc_id);
+	libztex_setFreq(ztex, bestM, cgpu->proc_repr);
+	ztex_releaseFpga(ztex);
+
+	return true;
+}
+
+static bool ztex_updateFreq(struct thr_info *thr)
+{
+	struct cgpu_info *cgpu = thr->cgpu;
+	struct libztex_device *ztex = thr->cgpu->device_ztex;
+	bool rv = dclk_updateFreq(&ztex->dclk, ztex_change_clock_func, thr);
+	if (unlikely(!rv)) {
+		ztex_selectFpga(ztex, cgpu->proc_id);
+		libztex_resetFpga(ztex);
+		ztex_releaseFpga(ztex);
+	}
+	return rv;
+}
+
+static bool ztex_checkNonce(struct cgpu_info *cgpu,
                             struct work *work,
                             struct libztex_hash_data *hdata)
 {
 	uint32_t *data32 = (uint32_t *)(work->data);
-	unsigned char swap[128];
+	unsigned char swap[80];
 	uint32_t *swap32 = (uint32_t *)swap;
 	unsigned char hash1[32];
 	unsigned char hash2[32];
 	uint32_t *hash2_32 = (uint32_t *)hash2;
-	int i;
 
-#if defined(__BIGENDIAN__) || defined(MIPSEB)
-	hdata->nonce = swab32(hdata->nonce);
-	hdata->hash7 = swab32(hdata->hash7);
-#endif
+	swap32[76/4] = htobe32(hdata->nonce);
 
-	work->data[64 + 12 + 0] = (hdata->nonce >> 0) & 0xff;
-	work->data[64 + 12 + 1] = (hdata->nonce >> 8) & 0xff;
-	work->data[64 + 12 + 2] = (hdata->nonce >> 16) & 0xff;
-	work->data[64 + 12 + 3] = (hdata->nonce >> 24) & 0xff;
+	swap32yes(swap32, data32, 76 / 4);
 
-	for (i = 0; i < 80 / 4; i++)
-		swap32[i] = swab32(data32[i]);
-	
-	sha2(swap, 80, hash1, false);
-	sha2(hash1, 32, hash2, false);
-#if defined(__BIGENDIAN__) || defined(MIPSEB)
-	if (hash2_32[7] != ((hdata->hash7 + 0x5be0cd19) & 0xFFFFFFFF)) {
-#else
-	if (swab32(hash2_32[7]) != ((hdata->hash7 + 0x5be0cd19) & 0xFFFFFFFF)) {
-#endif
-		ztex->errorCount[ztex->freqM] += 1.0 / ztex->numNonces;
-		applog(LOG_DEBUG, "%s: checkNonce failed for %0.8X", ztex->repr, hdata->nonce);
+	sha256(swap, 80, hash1);
+	sha256(hash1, 32, hash2);
+
+	if (be32toh(hash2_32[7]) != ((hdata->hash7 + 0x5be0cd19) & 0xFFFFFFFF)) {
+		applog(LOG_DEBUG, "%"PRIpreprv": checkNonce failed for %08x", cgpu->proc_repr, hdata->nonce);
 		return false;
 	}
 	return true;
@@ -188,6 +185,7 @@ static bool ztex_checkNonce(struct libztex_device *ztex,
 static int64_t ztex_scanhash(struct thr_info *thr, struct work *work,
                               __maybe_unused int64_t max_nonce)
 {
+	struct cgpu_info *cgpu = thr->cgpu;
 	struct libztex_device *ztex;
 	unsigned char sendbuf[44];
 	int i, j, k;
@@ -195,68 +193,73 @@ static int64_t ztex_scanhash(struct thr_info *thr, struct work *work,
 	int backlog_p = 0, backlog_max;
 	uint32_t *lastnonce;
 	uint32_t nonce, noncecnt = 0;
-	bool overflow, found, rv;
+	bool overflow, found;
 	struct libztex_hash_data hdata[GOLDEN_BACKLOG];
+
+	if (thr->cgpu->deven == DEV_DISABLED)
+		return -1;
 
 	ztex = thr->cgpu->device_ztex;
 
 	memcpy(sendbuf, work->data + 64, 12);
 	memcpy(sendbuf + 12, work->midstate, 32);
-	
-	ztex_selectFpga(ztex);
+
+	ztex_selectFpga(ztex, cgpu->proc_id);
 	i = libztex_sendHashData(ztex, sendbuf);
 	if (i < 0) {
 		// Something wrong happened in send
-		applog(LOG_ERR, "%s: Failed to send hash data with err %d, retrying", ztex->repr, i);
-		usleep(500000);
+		applog(LOG_ERR, "%"PRIpreprv": Failed to send hash data with err %d, retrying", cgpu->proc_repr, i);
+		cgsleep_ms(500);
 		i = libztex_sendHashData(ztex, sendbuf);
 		if (i < 0) {
 			// And there's nothing we can do about it
 			ztex_disable(thr);
-			applog(LOG_ERR, "%s: Failed to send hash data with err %d, giving up", ztex->repr, i);
+			applog(LOG_ERR, "%"PRIpreprv": Failed to send hash data with err %d, giving up", cgpu->proc_repr, i);
 			ztex_releaseFpga(ztex);
 			return -1;
 		}
 	}
 	ztex_releaseFpga(ztex);
-	
-	applog(LOG_DEBUG, "%s: sent hashdata", ztex->repr);
 
-	lastnonce = malloc(sizeof(uint32_t)*ztex->numNonces);
+	applog(LOG_DEBUG, "%"PRIpreprv": sent hashdata", cgpu->proc_repr);
+
+	lastnonce = calloc(1, sizeof(uint32_t)*ztex->numNonces);
 	if (lastnonce == NULL) {
-		applog(LOG_ERR, "%s: failed to allocate lastnonce[%d]", ztex->repr, ztex->numNonces);
+		applog(LOG_ERR, "%"PRIpreprv": failed to allocate lastnonce[%d]", cgpu->proc_repr, ztex->numNonces);
 		return -1;
 	}
-	memset(lastnonce, 0, sizeof(uint32_t)*ztex->numNonces);
-	
-	backlog_max = ztex->numNonces * (1 + ztex->extraSolutions);
-	backlog = malloc(sizeof(uint32_t) * backlog_max);
-	if (backlog == NULL) {
-		applog(LOG_ERR, "%s: failed to allocate backlog[%d]", ztex->repr, backlog_max);
-		return -1;
-	}
-	memset(backlog, 0, sizeof(uint32_t) * backlog_max);
-	
-	overflow = false;
 
-	applog(LOG_DEBUG, "%s: entering poll loop", ztex->repr);
+	/* Add an extra slot for detecting dupes that lie around */
+	backlog_max = ztex->numNonces * (2 + ztex->extraSolutions);
+	backlog = calloc(1, sizeof(uint32_t) * backlog_max);
+	if (backlog == NULL) {
+		applog(LOG_ERR, "%"PRIpreprv": failed to allocate backlog[%d]", cgpu->proc_repr, backlog_max);
+		free(lastnonce);
+		return -1;
+	}
+
+	overflow = false;
+	int count = 0;
+
+	applog(LOG_DEBUG, "%"PRIpreprv": entering poll loop", cgpu->proc_repr);
 	while (!(overflow || thr->work_restart)) {
-		usleep(250000);
-		if (thr->work_restart) {
-			applog(LOG_DEBUG, "%s: New work detected", ztex->repr);
+		count++;
+		if (!restart_wait(thr, 250))
+		{
+			applog(LOG_DEBUG, "%"PRIpreprv": New work detected", cgpu->proc_repr);
 			break;
 		}
-		ztex_selectFpga(ztex);
+		ztex_selectFpga(ztex, cgpu->proc_id);
 		i = libztex_readHashData(ztex, &hdata[0]);
 		if (i < 0) {
 			// Something wrong happened in read
-			applog(LOG_ERR, "%s: Failed to read hash data with err %d, retrying", ztex->repr, i);
-			usleep(500000);
+			applog(LOG_ERR, "%"PRIpreprv": Failed to read hash data with err %d, retrying", cgpu->proc_repr, i);
+			cgsleep_ms(500);
 			i = libztex_readHashData(ztex, &hdata[0]);
 			if (i < 0) {
 				// And there's nothing we can do about it
 				ztex_disable(thr);
-				applog(LOG_ERR, "%s: Failed to read hash data with err %d, giving up", ztex->repr, i);
+				applog(LOG_ERR, "%"PRIpreprv": Failed to read hash data with err %d, giving up", cgpu->proc_repr, i);
 				free(lastnonce);
 				free(backlog);
 				ztex_releaseFpga(ztex);
@@ -266,66 +269,62 @@ static int64_t ztex_scanhash(struct thr_info *thr, struct work *work,
 		ztex_releaseFpga(ztex);
 
 		if (thr->work_restart) {
-			applog(LOG_DEBUG, "%s: New work detected", ztex->repr);
+			applog(LOG_DEBUG, "%"PRIpreprv": New work detected", cgpu->proc_repr);
 			break;
 		}
 
-		ztex->errorCount[ztex->freqM] *= 0.995;
-		ztex->errorWeight[ztex->freqM] = ztex->errorWeight[ztex->freqM] * 0.995 + 1.0;
- 
+		dclk_gotNonces(&ztex->dclk);
+
 		for (i = 0; i < ztex->numNonces; i++) {
 			nonce = hdata[i].nonce;
-#if defined(__BIGENDIAN__) || defined(MIPSEB)
-			nonce = swab32(nonce);
-#endif
 			if (nonce > noncecnt)
 				noncecnt = nonce;
-			if (((nonce & 0x7fffffff) >> 4) < ((lastnonce[i] & 0x7fffffff) >> 4)) {
-				applog(LOG_DEBUG, "%s: overflow nonce=%0.8x lastnonce=%0.8x", ztex->repr, nonce, lastnonce[i]);
+			if (((0xffffffff - nonce) < (nonce - lastnonce[i])) || nonce < lastnonce[i]) {
+				applog(LOG_DEBUG, "%"PRIpreprv": overflow nonce=%08x lastnonce=%08x", cgpu->proc_repr, nonce, lastnonce[i]);
 				overflow = true;
 			} else
 				lastnonce[i] = nonce;
-#if !(defined(__BIGENDIAN__) || defined(MIPSEB))
-			nonce = swab32(nonce);
-#endif
-			if (!ztex_checkNonce(ztex, work, &hdata[i])) {
-				thr->cgpu->hw_errors++;
-				continue;
+
+			if (!ztex_checkNonce(cgpu, work, &hdata[i])) {
+				// do not count errors in the first 500ms after sendHashData (2x250 wait time)
+				if (count > 2)
+					dclk_errorCount(&ztex->dclk, 1.0 / ztex->numNonces);
+
+				inc_hw_errors_only(thr);
 			}
+
 			for (j=0; j<=ztex->extraSolutions; j++) {
 				nonce = hdata[i].goldenNonce[j];
-				if (nonce > 0) {
-					found = false;
-					for (k = 0; k < backlog_max; k++) {
-						if (backlog[k] == nonce) {
-							found = true;
-							break;
-						}
-					}
-					if (!found) {
-						applog(LOG_DEBUG, "%s: Share found N%dE%d", ztex->repr, i, j);
-						backlog[backlog_p++] = nonce;
-						if (backlog_p >= backlog_max)
-							backlog_p = 0;
-#if defined(__BIGENDIAN__) || defined(MIPSEB)
-						nonce = swab32(nonce);
-#endif
-						work->blk.nonce = 0xffffffff;
-						rv = submit_nonce(thr, work, nonce);
-						applog(LOG_DEBUG, "%s: submitted %0.8x %d", ztex->repr, nonce, rv);
+
+				if (nonce == ztex->offsNonces) {
+					continue;
+				}
+
+				found = false;
+				for (k = 0; k < backlog_max; k++) {
+					if (backlog[k] == nonce) {
+						found = true;
+						break;
 					}
 				}
+				if (!found) {
+					backlog[backlog_p++] = nonce;
+
+					if (backlog_p >= backlog_max)
+						backlog_p = 0;
+
+					work->blk.nonce = 0xffffffff;
+					if (!j || test_nonce(work, nonce, false))
+						submit_nonce(thr, work, nonce);
+					applog(LOG_DEBUG, "%"PRIpreprv": submitted %08x (from N%dE%d)", cgpu->proc_repr, nonce, i, j);
+				}
 			}
-
 		}
-
 	}
 
-	ztex->errorRate[ztex->freqM] = ztex->errorCount[ztex->freqM] /	ztex->errorWeight[ztex->freqM] * (ztex->errorWeight[ztex->freqM] < 100? ztex->errorWeight[ztex->freqM] * 0.01: 1.0);
-	if (ztex->errorRate[ztex->freqM] > ztex->maxErrorRate[ztex->freqM])
-		ztex->maxErrorRate[ztex->freqM] = ztex->errorRate[ztex->freqM];
+	dclk_preUpdate(&ztex->dclk);
 
-	if (!ztex_updateFreq(ztex)) {
+	if (!ztex_updateFreq(thr)) {
 		// Something really serious happened, so mark this thread as dead!
 		free(lastnonce);
 		free(backlog);
@@ -333,32 +332,24 @@ static int64_t ztex_scanhash(struct thr_info *thr, struct work *work,
 		return -1;
 	}
 
-	applog(LOG_DEBUG, "%s: exit %1.8X", ztex->repr, noncecnt);
+	applog(LOG_DEBUG, "%"PRIpreprv": exit %1.8X", cgpu->proc_repr, noncecnt);
 
 	work->blk.nonce = 0xffffffff;
 
 	free(lastnonce);
 	free(backlog);
-	
+
 	return noncecnt;
 }
 
-static void ztex_statline_before(char *buf, struct cgpu_info *cgpu)
-{
-	if (cgpu->deven == DEV_ENABLED) {
-		tailsprintf(buf, "%s-%d | ", cgpu->device_ztex->snString, cgpu->device_ztex->fpgaNum+1);
-		tailsprintf(buf, "%0.2fMhz | ", cgpu->device_ztex->freqM1 * (cgpu->device_ztex->freqM + 1));
-	}
-}
-
 static struct api_data*
-get_ztex_api_extra_device_status(struct cgpu_info *ztex)
+get_ztex_drv_extra_device_status(struct cgpu_info *ztex)
 {
 	struct api_data*root = NULL;
 	struct libztex_device *ztexr = ztex->device_ztex;
 
 	if (ztexr) {
-		double frequency = ztexr->freqM1 * (ztexr->freqM + 1);
+		double frequency = ztexr->freqM1 * (ztexr->dclk.freqM + 1);
 		root = api_add_freq(root, "Frequency", &frequency, true);
 	}
 
@@ -367,50 +358,65 @@ get_ztex_api_extra_device_status(struct cgpu_info *ztex)
 
 static bool ztex_prepare(struct thr_info *thr)
 {
-	struct timeval now;
 	struct cgpu_info *cgpu = thr->cgpu;
 	struct libztex_device *ztex = cgpu->device_ztex;
 
-	gettimeofday(&now, NULL);
-	get_datestamp(cgpu->init, &now);
-	
-	ztex_selectFpga(ztex);
-	if (libztex_configureFpga(ztex) != 0)
-		return false;
+	{
+		char *fpganame = malloc(LIBZTEX_SNSTRING_LEN+3+1);
+		sprintf(fpganame, "%s-%u", ztex->snString, cgpu->proc_id+1);
+		cgpu->name = fpganame;
+	}
+
+	ztex_selectFpga(ztex, cgpu->proc_id);
+	if (libztex_configureFpga(ztex, cgpu->proc_repr) != 0) {
+		libztex_resetFpga(ztex);
+		ztex_releaseFpga(ztex);
+		applog(LOG_ERR, "%"PRIpreprv": Disabling!", cgpu->proc_repr);
+		thr->cgpu->deven = DEV_DISABLED;
+		return true;
+	}
+	ztex->dclk.freqM = ztex->dclk.freqMaxM+1;
+	//ztex_updateFreq(thr);
+	libztex_setFreq(ztex, ztex->dclk.freqMDefault, cgpu->proc_repr);
 	ztex_releaseFpga(ztex);
-	ztex->freqM = ztex->freqMaxM+1;;
-	//ztex_updateFreq(ztex);
-	libztex_setFreq(ztex, ztex->freqMDefault);
-	applog(LOG_DEBUG, "%s: prepare", ztex->repr);
+	notifier_init(thr->work_restart_notifier);
+	applog(LOG_DEBUG, "%"PRIpreprv": prepare", cgpu->proc_repr);
+	cgpu->status = LIFE_INIT2;
 	return true;
 }
 
 static void ztex_shutdown(struct thr_info *thr)
 {
-	if (thr->cgpu->device_ztex != NULL) {
-		if (thr->cgpu->device_ztex->fpgaNum == 0)
-			pthread_mutex_destroy(&thr->cgpu->device_ztex->mutex);  
-		applog(LOG_DEBUG, "%s: shutdown", thr->cgpu->device_ztex->repr);
-		libztex_destroy_device(thr->cgpu->device_ztex);
-		thr->cgpu->device_ztex = NULL;
-	}
+	struct cgpu_info *cgpu = thr->cgpu;
+	struct libztex_device *ztex = cgpu->device_ztex;
+	
+	if (!ztex)
+		return;
+	
+	cgpu->device_ztex = NULL;
+	applog(LOG_DEBUG, "%"PRIpreprv": shutdown", cgpu->proc_repr);
+	if (--ztex->handles)
+		return;
+	applog(LOG_DEBUG, "%s: No handles remaining, destroying libztex device", cgpu->dev_repr);
+	if (ztex->root->numberOfFpgas > 1)
+		pthread_mutex_destroy(&ztex->mutex);
+	libztex_destroy_device(ztex);
 }
 
 static void ztex_disable(struct thr_info *thr)
 {
-	applog(LOG_ERR, "%s: Disabling!", thr->cgpu->device_ztex->repr);
-	devices[thr->cgpu->device_id]->deven = DEV_DISABLED;
+	applog(LOG_ERR, "%"PRIpreprv": Disabling!", thr->cgpu->proc_repr);
+	thr->cgpu->deven = DEV_DISABLED;
 	ztex_shutdown(thr);
 }
 
-struct device_api ztex_api = {
+struct device_drv ztex_drv = {
 	.dname = "ztex",
 	.name = "ZTX",
-	.api_detect = ztex_detect,
-	.get_statline_before = ztex_statline_before,
-	.get_api_extra_device_status = get_ztex_api_extra_device_status,
-	.thread_prepare = ztex_prepare,
+	.lowl_match = ztex_lowl_match,
+	.lowl_probe = ztex_lowl_probe,
+	.get_api_extra_device_status = get_ztex_drv_extra_device_status,
+	.thread_init = ztex_prepare,
 	.scanhash = ztex_scanhash,
 	.thread_shutdown = ztex_shutdown,
 };
-

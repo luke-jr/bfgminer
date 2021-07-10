@@ -1,5 +1,6 @@
 /*
- * Copyright 2011-2012 Con Kolivas
+ * Copyright 2011-2013 Con Kolivas
+ * Copyright 2012-2014 Luke Dashjr
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the Free
@@ -9,21 +10,25 @@
 
 #include "config.h"
 
-#if defined(HAVE_ADL) && (defined(__linux) || defined (WIN32))
+#ifdef HAVE_ADL
 
 #include <stdio.h>
 #include <string.h>
 #include <math.h>
 
 #ifdef HAVE_CURSES
+// Must be before stdbool, since pdcurses typedefs bool :/
 #include <curses.h>
 #endif
 
+#include <stdbool.h>
+
+#include "driver-opencl.h"
 #include "miner.h"
-#include "ADL_SDK/adl_sdk.h"
+#include "ADL/adl_sdk.h"
 #include "compat.h"
 
-#if defined (__linux)
+#ifndef WIN32
 #include <dlfcn.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -33,6 +38,10 @@
 #endif
 #include "adl_functions.h"
 
+#ifndef __stdcall
+#define __stdcall
+#endif
+
 #ifndef HAVE_CURSES
 #define wlogprint(...)  applog(LOG_WARNING, __VA_ARGS__)
 #endif
@@ -40,7 +49,7 @@
 bool adl_active;
 bool opt_reorder = false;
 
-int opt_hysteresis = 3;
+static
 const int opt_targettemp = 75;
 const int opt_overheattemp = 85;
 static pthread_mutex_t adl_lock;
@@ -69,7 +78,7 @@ static void __stdcall ADL_Main_Memory_Free (void **lpBuffer)
 	}
 }
 
-#if defined (LINUX)
+#ifndef WIN32
 // equivalent functions in linux
 static void *GetProcAddress(void *pLibrary, const char *name)
 {
@@ -95,9 +104,9 @@ static	ADL_OVERDRIVE5_POWERCONTROL_GET	ADL_Overdrive5_PowerControl_Get;
 static	ADL_OVERDRIVE5_POWERCONTROL_SET	ADL_Overdrive5_PowerControl_Set;
 static	ADL_OVERDRIVE5_FANSPEEDTODEFAULT_SET	ADL_Overdrive5_FanSpeedToDefault_Set;
 
-#if defined (LINUX)
+#ifndef WIN32
 	static void *hDLL;	// Handle to .so library
-#else
+#else /* WIN32 */
 	HINSTANCE hDLL;		// Handle to DLL
 #endif
 static int iNumberAdapters;
@@ -133,14 +142,17 @@ static bool prepare_adl(void)
 {
 	int result;
 
-#if defined (LINUX)
-	hDLL = dlopen( "libatiadlxx.so", RTLD_LAZY|RTLD_GLOBAL);
-#else
+#if defined(WIN32) || defined(__CYGWIN__)
+#	ifdef __CYGWIN__
+#		define LoadLibrary(x) dlopen(x, RTLD_LAZY|RTLD_GLOBAL);
+#	endif
 	hDLL = LoadLibrary("atiadlxx.dll");
 	if (hDLL == NULL)
 		// A 32 bit calling application on 64 bit OS will fail to LoadLIbrary.
 		// Try to load the 32 bit library (atiadlxy.dll) instead
 		hDLL = LoadLibrary("atiadlxy.dll");
+#else
+	hDLL = dlopen( "libatiadlxx.so", RTLD_LAZY|RTLD_GLOBAL);
 #endif
 	if (hDLL == NULL) {
 		applog(LOG_INFO, "Unable to load ati adl library");
@@ -241,12 +253,18 @@ void init_adl(int nDevs)
 		result = ADL_Adapter_ID_Get(iAdapterIndex, &lpAdapterID);
 		if (result != ADL_OK) {
 			applog(LOG_INFO, "Failed to ADL_Adapter_ID_Get. Error %d", result);
-			continue;
+			if (result == -10)
+				applog(LOG_INFO, "This error says the device is not enabled");
 		}
-
+		else
 		/* Each adapter may have multiple entries */
 		if (lpAdapterID == last_adapter)
 			continue;
+		else
+		if (!lpAdapterID)
+			applog(LOG_INFO, "Adapter returns ID 0 meaning not AMD. Card order might be confused");
+		else
+			last_adapter = lpAdapterID;
 
 		applog(LOG_DEBUG, "GPU %d "
 		       "iAdapterIndex %d "
@@ -279,12 +297,6 @@ void init_adl(int nDevs)
 			applog(LOG_ERR, "Use the gpu map feature to reliably map OpenCL to ADL");
 			devs_match = false;
 		}
-		last_adapter = lpAdapterID;
-
-		if (!lpAdapterID) {
-			applog(LOG_INFO, "Adapter returns ID 0 meaning not AMD. Card order might be confused");
-			continue;
-		}
 	}
 
 	if (devices < nDevs) {
@@ -301,12 +313,14 @@ void init_adl(int nDevs)
 
 	/* Apply manually provided OpenCL to ADL mapping, if any */
 	for (i = 0; i < nDevs; i++) {
-		if (gpus[i].mapped) {
-			vadapters[gpus[i].virtual_adl].virtual_gpu = i;
-			applog(LOG_INFO, "Mapping OpenCL device %d to ADL device %d", i, gpus[i].virtual_adl);
-		}
+		struct opencl_device_data * const data = gpus[i].device_data;
+		if (data->mapped) {
+			vadapters[data->virtual_adl].virtual_gpu = i;
+			applog(LOG_INFO, "Mapping OpenCL device %d to ADL device %d", i, data->virtual_adl);
+		} else
+			data->virtual_adl = i;
 	}
-			
+
 	if (!devs_match) {
 		applog(LOG_ERR, "WARNING: Number of OpenCL and ADL devices did not match!");
 		applog(LOG_ERR, "Hardware monitoring may NOT match up with devices!");
@@ -337,44 +351,53 @@ void init_adl(int nDevs)
 		}
 	}
 
+	if (devices > nDevs)
+		devices = nDevs;
+
 	for (gpu = 0; gpu < devices; gpu++) {
+		struct cgpu_info * const cgpu = &gpus[gpu];
+		struct opencl_device_data * const data = cgpu->device_data;
 		struct gpu_adl *ga;
 		int iAdapterIndex;
 		int lpAdapterID;
 		ADLODPerformanceLevels *lpOdPerformanceLevels;
-		int lev;
+		int lev, adlGpu;
 
-		i = vadapters[gpu].id;
+		adlGpu = data->virtual_adl;
+		i = vadapters[adlGpu].id;
 		iAdapterIndex = lpInfo[i].iAdapterIndex;
-		gpus[gpu].virtual_gpu = vadapters[gpu].virtual_gpu;
+		data->virtual_gpu = vadapters[adlGpu].virtual_gpu;
 
 		/* Get unique identifier of the adapter, 0 means not AMD */
 		result = ADL_Adapter_ID_Get(iAdapterIndex, &lpAdapterID);
 		if (result != ADL_OK) {
 			applog(LOG_INFO, "Failed to ADL_Adapter_ID_Get. Error %d", result);
-			continue;
+			lpAdapterID = -1;
 		}
 
 		if (gpus[gpu].deven == DEV_DISABLED) {
-			gpus[i].gpu_engine =
-			gpus[i].gpu_memclock =
-			gpus[i].gpu_vddc =
-			gpus[i].gpu_fan =
-			gpus[i].gpu_powertune = 0;
+			data->gpu_engine =
+			data->gpu_memclock =
+			data->gpu_vddc =
+			data->gpu_fan =
+			data->gpu_powertune = 0;
 			continue;
 		}
 
 		applog(LOG_INFO, "GPU %d %s hardware monitoring enabled", gpu, lpInfo[i].strAdapterName);
-		if (gpus[gpu].name)
+		if (gpus[gpu].name) {
 			free((void*)gpus[gpu].name);
-		gpus[gpu].name = lpInfo[i].strAdapterName;
-		gpus[gpu].has_adl = true;
+			gpus[gpu].name = NULL;
+		}
+		if (lpInfo[i].strAdapterName[0])
+			gpus[gpu].name = trimmed_strdup(lpInfo[i].strAdapterName);
+		data->has_adl = true;
 		/* Flag adl as active if any card is successfully activated */
 		adl_active = true;
 
 		/* From here on we know this device is a discrete device and
 		 * should support ADL */
-		ga = &gpus[gpu].adl;
+		ga = &data->adl;
 		ga->gpu = gpu;
 		ga->iAdapterIndex = iAdapterIndex;
 		ga->lpAdapterID = lpAdapterID;
@@ -405,8 +428,8 @@ void init_adl(int nDevs)
 		/* Save these values as the defaults in case we wish to reset to defaults */
 		ga->DefPerfLev = lpOdPerformanceLevels;
 
-		if (gpus[gpu].gpu_engine) {
-			int setengine = gpus[gpu].gpu_engine * 100;
+		if (data->gpu_engine) {
+			int setengine = data->gpu_engine * 100;
 
 			/* Lower profiles can't have a higher setting */
 			for (j = 0; j < lev; j++) {
@@ -414,38 +437,38 @@ void init_adl(int nDevs)
 					lpOdPerformanceLevels->aLevels[j].iEngineClock = setengine;
 			}
 			lpOdPerformanceLevels->aLevels[lev].iEngineClock = setengine;
-			applog(LOG_INFO, "Setting GPU %d engine clock to %d", gpu, gpus[gpu].gpu_engine);
+			applog(LOG_INFO, "Setting GPU %d engine clock to %d", gpu, data->gpu_engine);
 			ADL_Overdrive5_ODPerformanceLevels_Set(iAdapterIndex, lpOdPerformanceLevels);
 			ga->maxspeed = setengine;
-			if (gpus[gpu].min_engine)
-				ga->minspeed = gpus[gpu].min_engine * 100;
+			if (data->min_engine)
+				ga->minspeed = data->min_engine * 100;
 			ga->managed = true;
-			if (gpus[gpu].gpu_memdiff)
-				set_memoryclock(gpu, gpus[gpu].gpu_engine + gpus[gpu].gpu_memdiff);
+			if (data->gpu_memdiff)
+				set_memoryclock(gpu, data->gpu_engine + data->gpu_memdiff);
 		}
 
-		if (gpus[gpu].gpu_memclock) {
-			int setmem = gpus[gpu].gpu_memclock * 100;
+		if (data->gpu_memclock) {
+			int setmem = data->gpu_memclock * 100;
 
 			for (j = 0; j < lev; j++) {
 				if (lpOdPerformanceLevels->aLevels[j].iMemoryClock > setmem)
 					lpOdPerformanceLevels->aLevels[j].iMemoryClock = setmem;
 			}
 			lpOdPerformanceLevels->aLevels[lev].iMemoryClock = setmem;
-			applog(LOG_INFO, "Setting GPU %d memory clock to %d", gpu, gpus[gpu].gpu_memclock);
+			applog(LOG_INFO, "Setting GPU %d memory clock to %d", gpu, data->gpu_memclock);
 			ADL_Overdrive5_ODPerformanceLevels_Set(iAdapterIndex, lpOdPerformanceLevels);
 			ga->managed = true;
 		}
 
-		if (gpus[gpu].gpu_vddc) {
-			int setv = gpus[gpu].gpu_vddc * 1000;
+		if (data->gpu_vddc) {
+			int setv = data->gpu_vddc * 1000;
 
 			for (j = 0; j < lev; j++) {
 				if (lpOdPerformanceLevels->aLevels[j].iVddc > setv)
 					lpOdPerformanceLevels->aLevels[j].iVddc = setv;
 			}
 			lpOdPerformanceLevels->aLevels[lev].iVddc = setv;
-			applog(LOG_INFO, "Setting GPU %d voltage to %.3f", gpu, gpus[gpu].gpu_vddc);
+			applog(LOG_INFO, "Setting GPU %d voltage to %.3f", gpu, data->gpu_vddc);
 			ADL_Overdrive5_ODPerformanceLevels_Set(iAdapterIndex, lpOdPerformanceLevels);
 			ga->managed = true;
 		}
@@ -462,52 +485,65 @@ void init_adl(int nDevs)
 			ga->has_fanspeed = true;
 
 		/* Save the fanspeed values as defaults in case we reset later */
+		ga->DefFanSpeedValue.iSpeedType = ADL_DL_FANCTRL_SPEED_TYPE_RPM;
 		ADL_Overdrive5_FanSpeed_Get(ga->iAdapterIndex, 0, &ga->DefFanSpeedValue);
-		if (gpus[gpu].gpu_fan)
-			set_fanspeed(gpu, gpus[gpu].gpu_fan);
+		if (data->gpu_fan)
+			set_fanspeed(gpu, data->gpu_fan);
 		else
-			gpus[gpu].gpu_fan = 85; /* Set a nominal upper limit of 85% */
+			data->gpu_fan = 85; /* Set a nominal upper limit of 85% */
 
 		/* Not fatal if powercontrol get fails */
 		if (ADL_Overdrive5_PowerControl_Get(ga->iAdapterIndex, &ga->iPercentage, &dummy) != ADL_OK)
 			applog(LOG_INFO, "Failed to ADL_Overdrive5_PowerControl_get");
 
-		if (gpus[gpu].gpu_powertune) {
-			ADL_Overdrive5_PowerControl_Set(ga->iAdapterIndex, gpus[gpu].gpu_powertune);
+		if (data->gpu_powertune) {
+			ADL_Overdrive5_PowerControl_Set(ga->iAdapterIndex, data->gpu_powertune);
 			ADL_Overdrive5_PowerControl_Get(ga->iAdapterIndex, &ga->iPercentage, &dummy);
 			ga->managed = true;
 		}
 
 		/* Set some default temperatures for autotune when enabled */
-		if (!ga->targettemp)
-			ga->targettemp = opt_targettemp;
+		if (!gpus[gpu].targettemp)
+			gpus[gpu].targettemp = opt_targettemp;
 		if (!ga->overtemp)
 			ga->overtemp = opt_overheattemp;
 		if (!gpus[gpu].cutofftemp)
 			gpus[gpu].cutofftemp = opt_cutofftemp;
 		if (opt_autofan) {
-			ga->autofan = true;
 			/* Set a safe starting default if we're automanaging fan speeds */
-			set_fanspeed(gpu, 50);
+			int nominal = 50;
+
+			ga->autofan = true;
+			/* Clamp fanspeed values to range provided */
+			if (nominal > data->gpu_fan)
+				nominal = data->gpu_fan;
+			if (nominal < data->min_fan)
+				nominal = data->min_fan;
+			set_fanspeed(gpu, nominal);
 		}
 		if (opt_autoengine) {
 			ga->autoengine = true;
 			ga->managed = true;
 		}
+		gpus[gpu].temp =
 		ga->lasttemp = __gpu_temp(ga);
 	}
 
 	for (gpu = 0; gpu < devices; gpu++) {
-		struct gpu_adl *ga = &gpus[gpu].adl;
+		struct cgpu_info * const cgpu = &gpus[gpu];
+		struct opencl_device_data * const data = cgpu->device_data;
+		struct gpu_adl *ga = &data->adl;
 		int j;
 
 		for (j = 0; j < devices; j++) {
+			struct cgpu_info * const other_cgpu = &gpus[j];
+			struct opencl_device_data * const other_data = other_cgpu->device_data;
 			struct gpu_adl *other_ga;
 
 			if (j == gpu)
 				continue;
 
-			other_ga = &gpus[j].adl;
+			other_ga = &other_data->adl;
 
 			/* Search for twin GPUs on a single card. They will be
 			 * separated by one bus id and one will have fanspeed
@@ -533,13 +569,15 @@ static float __gpu_temp(struct gpu_adl *ga)
 
 float gpu_temp(int gpu)
 {
+	struct cgpu_info * const cgpu = &gpus[gpu];
+	struct opencl_device_data * const data = cgpu->device_data;
 	struct gpu_adl *ga;
 	float ret = -1;
 
-	if (!gpus[gpu].has_adl || !adl_active)
+	if (!data->has_adl || !adl_active)
 		return ret;
 
-	ga = &gpus[gpu].adl;
+	ga = &data->adl;
 	lock_adl();
 	ret = __gpu_temp(ga);
 	unlock_adl();
@@ -554,13 +592,15 @@ static inline int __gpu_engineclock(struct gpu_adl *ga)
 
 int gpu_engineclock(int gpu)
 {
+	struct cgpu_info * const cgpu = &gpus[gpu];
+	struct opencl_device_data * const data = cgpu->device_data;
 	struct gpu_adl *ga;
 	int ret = -1;
 
-	if (!gpus[gpu].has_adl || !adl_active)
+	if (!data->has_adl || !adl_active)
 		return ret;
 
-	ga = &gpus[gpu].adl;
+	ga = &data->adl;
 	lock_adl();
 	if (ADL_Overdrive5_CurrentActivity_Get(ga->iAdapterIndex, &ga->lpActivity) != ADL_OK)
 		goto out;
@@ -577,13 +617,15 @@ static inline int __gpu_memclock(struct gpu_adl *ga)
 
 int gpu_memclock(int gpu)
 {
+	struct cgpu_info * const cgpu = &gpus[gpu];
+	struct opencl_device_data * const data = cgpu->device_data;
 	struct gpu_adl *ga;
 	int ret = -1;
 
-	if (!gpus[gpu].has_adl || !adl_active)
+	if (!data->has_adl || !adl_active)
 		return ret;
 
-	ga = &gpus[gpu].adl;
+	ga = &data->adl;
 	lock_adl();
 	if (ADL_Overdrive5_CurrentActivity_Get(ga->iAdapterIndex, &ga->lpActivity) != ADL_OK)
 		goto out;
@@ -600,13 +642,15 @@ static inline float __gpu_vddc(struct gpu_adl *ga)
 
 float gpu_vddc(int gpu)
 {
+	struct cgpu_info * const cgpu = &gpus[gpu];
+	struct opencl_device_data * const data = cgpu->device_data;
 	struct gpu_adl *ga;
 	float ret = -1;
 
-	if (!gpus[gpu].has_adl || !adl_active)
+	if (!data->has_adl || !adl_active)
 		return ret;
 
-	ga = &gpus[gpu].adl;
+	ga = &data->adl;
 	lock_adl();
 	if (ADL_Overdrive5_CurrentActivity_Get(ga->iAdapterIndex, &ga->lpActivity) != ADL_OK)
 		goto out;
@@ -625,13 +669,15 @@ static inline int __gpu_activity(struct gpu_adl *ga)
 
 int gpu_activity(int gpu)
 {
+	struct cgpu_info * const cgpu = &gpus[gpu];
+	struct opencl_device_data * const data = cgpu->device_data;
 	struct gpu_adl *ga;
 	int ret = -1;
 
-	if (!gpus[gpu].has_adl || !adl_active)
+	if (!data->has_adl || !adl_active)
 		return ret;
 
-	ga = &gpus[gpu].adl;
+	ga = &data->adl;
 	lock_adl();
 	ret = ADL_Overdrive5_CurrentActivity_Get(ga->iAdapterIndex, &ga->lpActivity);
 	unlock_adl();
@@ -657,13 +703,15 @@ static inline int __gpu_fanspeed(struct gpu_adl *ga)
 
 int gpu_fanspeed(int gpu)
 {
+	struct cgpu_info * const cgpu = &gpus[gpu];
+	struct opencl_device_data * const data = cgpu->device_data;
 	struct gpu_adl *ga;
 	int ret = -1;
 
-	if (!gpus[gpu].has_adl || !adl_active)
+	if (!data->has_adl || !adl_active)
 		return ret;
 
-	ga = &gpus[gpu].adl;
+	ga = &data->adl;
 	lock_adl();
 	ret = __gpu_fanspeed(ga);
 	unlock_adl();
@@ -685,31 +733,18 @@ static int __gpu_fanpercent(struct gpu_adl *ga)
 
 int gpu_fanpercent(int gpu)
 {
+	struct cgpu_info * const cgpu = &gpus[gpu];
+	struct opencl_device_data * const data = cgpu->device_data;
 	struct gpu_adl *ga;
 	int ret = -1;
 
-	if (!gpus[gpu].has_adl || !adl_active)
+	if (!data->has_adl || !adl_active)
 		return ret;
 
-	ga = &gpus[gpu].adl;
+	ga = &data->adl;
 	lock_adl();
 	ret = __gpu_fanpercent(ga);
 	unlock_adl();
-	if (unlikely(ga->has_fanspeed && ret == -1)) {
-		applog(LOG_WARNING, "GPU %d stopped reporting fanspeed due to driver corruption", gpu);
-		if (opt_restart) {
-			applog(LOG_WARNING, "Restart enabled, will attempt to restart BFGMiner");
-			applog(LOG_WARNING, "You can disable this with the --no-restart option");
-			app_restart();
-		}
-		applog(LOG_WARNING, "Disabling fanspeed monitoring on this device");
-		ga->has_fanspeed = false;
-		if (ga->twin) {
-			applog(LOG_WARNING, "Disabling fanspeed linking on GPU twins");
-			ga->twin->twin = NULL;;
-			ga->twin = NULL;
-		}
-	}
 	return ret;
 }
 
@@ -724,13 +759,15 @@ static inline int __gpu_powertune(struct gpu_adl *ga)
 
 int gpu_powertune(int gpu)
 {
+	struct cgpu_info * const cgpu = &gpus[gpu];
+	struct opencl_device_data * const data = cgpu->device_data;
 	struct gpu_adl *ga;
 	int ret = -1;
 
-	if (!gpus[gpu].has_adl || !adl_active)
+	if (!data->has_adl || !adl_active)
 		return ret;
 
-	ga = &gpus[gpu].adl;
+	ga = &data->adl;
 	lock_adl();
 	ret = __gpu_powertune(ga);
 	unlock_adl();
@@ -740,14 +777,17 @@ int gpu_powertune(int gpu)
 bool gpu_stats(int gpu, float *temp, int *engineclock, int *memclock, float *vddc,
 	       int *activity, int *fanspeed, int *fanpercent, int *powertune)
 {
+	struct cgpu_info * const cgpu = &gpus[gpu];
+	struct opencl_device_data * const data = cgpu->device_data;
 	struct gpu_adl *ga;
 
-	if (!gpus[gpu].has_adl || !adl_active)
+	if (!data->has_adl || !adl_active)
 		return false;
 
-	ga = &gpus[gpu].adl;
+	ga = &data->adl;
 
 	lock_adl();
+	gpus[gpu].temp =
 	*temp = __gpu_temp(ga);
 	if (ADL_Overdrive5_CurrentActivity_Get(ga->iAdapterIndex, &ga->lpActivity) != ADL_OK) {
 		*engineclock = 0;
@@ -771,13 +811,15 @@ bool gpu_stats(int gpu, float *temp, int *engineclock, int *memclock, float *vdd
 #ifdef HAVE_CURSES
 static void get_enginerange(int gpu, int *imin, int *imax)
 {
+	struct cgpu_info * const cgpu = &gpus[gpu];
+	struct opencl_device_data * const data = cgpu->device_data;
 	struct gpu_adl *ga;
 
-	if (!gpus[gpu].has_adl || !adl_active) {
+	if (!data->has_adl || !adl_active) {
 		wlogprint("Get enginerange not supported\n");
 		return;
 	}
-	ga = &gpus[gpu].adl;
+	ga = &data->adl;
 	*imin = ga->lpOdParameters.sEngineClock.iMin / 100;
 	*imax = ga->lpOdParameters.sEngineClock.iMax / 100;
 }
@@ -785,17 +827,19 @@ static void get_enginerange(int gpu, int *imin, int *imax)
 
 int set_engineclock(int gpu, int iEngineClock)
 {
+	struct cgpu_info * const cgpu = &gpus[gpu];
+	struct opencl_device_data * const data = cgpu->device_data;
 	ADLODPerformanceLevels *lpOdPerformanceLevels;
 	int i, lev, ret = 1;
 	struct gpu_adl *ga;
 
-	if (!gpus[gpu].has_adl || !adl_active) {
+	if (!data->has_adl || !adl_active) {
 		wlogprint("Set engineclock not supported\n");
 		return ret;
 	}
 
 	iEngineClock *= 100;
-	ga = &gpus[gpu].adl;
+	ga = &data->adl;
 
 	/* Keep track of intended engine clock in case the device changes
 	 * profile and drops while idle, not taking the new engine clock */
@@ -827,19 +871,25 @@ int set_engineclock(int gpu, int iEngineClock)
 	ga->managed = true;
 out:
 	unlock_adl();
+
+	if (data->gpu_memdiff)
+		set_memoryclock(gpu, iEngineClock / 100 + data->gpu_memdiff);
+
 	return ret;
 }
 
 #ifdef HAVE_CURSES
 static void get_memoryrange(int gpu, int *imin, int *imax)
 {
+	struct cgpu_info * const cgpu = &gpus[gpu];
+	struct opencl_device_data * const data = cgpu->device_data;
 	struct gpu_adl *ga;
 
-	if (!gpus[gpu].has_adl || !adl_active) {
+	if (!data->has_adl || !adl_active) {
 		wlogprint("Get memoryrange not supported\n");
 		return;
 	}
-	ga = &gpus[gpu].adl;
+	ga = &data->adl;
 	*imin = ga->lpOdParameters.sMemoryClock.iMin / 100;
 	*imax = ga->lpOdParameters.sMemoryClock.iMax / 100;
 }
@@ -847,17 +897,21 @@ static void get_memoryrange(int gpu, int *imin, int *imax)
 
 int set_memoryclock(int gpu, int iMemoryClock)
 {
+	struct cgpu_info * const cgpu = &gpus[gpu];
+	struct opencl_device_data * const data = cgpu->device_data;
 	ADLODPerformanceLevels *lpOdPerformanceLevels;
 	int i, lev, ret = 1;
 	struct gpu_adl *ga;
 
-	if (!gpus[gpu].has_adl || !adl_active) {
+	if (!data->has_adl || !adl_active) {
 		wlogprint("Set memoryclock not supported\n");
 		return ret;
 	}
 
+	data->gpu_memclock = iMemoryClock;
+
 	iMemoryClock *= 100;
-	ga = &gpus[gpu].adl;
+	ga = &data->adl;
 
 	lev = ga->lpOdParameters.iNumberOfPerformanceLevels - 1;
 	lpOdPerformanceLevels = alloca(sizeof(ADLODPerformanceLevels) + (lev * sizeof(ADLODPerformanceLevel)));
@@ -887,13 +941,15 @@ out:
 #ifdef HAVE_CURSES
 static void get_vddcrange(int gpu, float *imin, float *imax)
 {
+	struct cgpu_info * const cgpu = &gpus[gpu];
+	struct opencl_device_data * const data = cgpu->device_data;
 	struct gpu_adl *ga;
 
-	if (!gpus[gpu].has_adl || !adl_active) {
+	if (!data->has_adl || !adl_active) {
 		wlogprint("Get vddcrange not supported\n");
 		return;
 	}
-	ga = &gpus[gpu].adl;
+	ga = &data->adl;
 	*imin = (float)ga->lpOdParameters.sVddc.iMin / 1000;
 	*imax = (float)ga->lpOdParameters.sVddc.iMax / 1000;
 }
@@ -904,6 +960,8 @@ static float curses_float(const char *query)
 	char *cvar;
 
 	cvar = curses_input(query);
+	if (unlikely(!cvar))
+		return -1;
 	ret = atof(cvar);
 	free(cvar);
 	return ret;
@@ -912,17 +970,19 @@ static float curses_float(const char *query)
 
 int set_vddc(int gpu, float fVddc)
 {
+	struct cgpu_info * const cgpu = &gpus[gpu];
+	struct opencl_device_data * const data = cgpu->device_data;
 	ADLODPerformanceLevels *lpOdPerformanceLevels;
 	int i, iVddc, lev, ret = 1;
 	struct gpu_adl *ga;
 
-	if (!gpus[gpu].has_adl || !adl_active) {
+	if (!data->has_adl || !adl_active) {
 		wlogprint("Set vddc not supported\n");
 		return ret;
 	}
 
 	iVddc = 1000 * fVddc;
-	ga = &gpus[gpu].adl;
+	ga = &data->adl;
 
 	lev = ga->lpOdParameters.iNumberOfPerformanceLevels - 1;
 	lpOdPerformanceLevels = alloca(sizeof(ADLODPerformanceLevels) + (lev * sizeof(ADLODPerformanceLevel)));
@@ -951,28 +1011,32 @@ out:
 
 static void get_fanrange(int gpu, int *imin, int *imax)
 {
+	struct cgpu_info * const cgpu = &gpus[gpu];
+	struct opencl_device_data * const data = cgpu->device_data;
 	struct gpu_adl *ga;
 
-	if (!gpus[gpu].has_adl || !adl_active) {
+	if (!data->has_adl || !adl_active) {
 		wlogprint("Get fanrange not supported\n");
 		return;
 	}
-	ga = &gpus[gpu].adl;
+	ga = &data->adl;
 	*imin = ga->lpFanSpeedInfo.iMinPercent;
 	*imax = ga->lpFanSpeedInfo.iMaxPercent;
 }
 
 int set_fanspeed(int gpu, int iFanSpeed)
 {
+	struct cgpu_info * const cgpu = &gpus[gpu];
+	struct opencl_device_data * const data = cgpu->device_data;
 	struct gpu_adl *ga;
 	int ret = 1;
 
-	if (!gpus[gpu].has_adl || !adl_active) {
+	if (!data->has_adl || !adl_active) {
 		wlogprint("Set fanspeed not supported\n");
 		return ret;
 	}
 
-	ga = &gpus[gpu].adl;
+	ga = &data->adl;
 	if (!(ga->lpFanSpeedInfo.iFlags & (ADL_DL_FANCTRL_SUPPORTS_RPM_WRITE | ADL_DL_FANCTRL_SUPPORTS_PERCENT_WRITE ))) {
 		applog(LOG_DEBUG, "GPU %d doesn't support rpm or percent write", gpu);
 		return ret;
@@ -983,8 +1047,14 @@ int set_fanspeed(int gpu, int iFanSpeed)
 	ga->targetfan = iFanSpeed;
 
 	lock_adl();
+	ga->lpFanSpeedValue.iSpeedType = ADL_DL_FANCTRL_SPEED_TYPE_RPM;
 	if (ADL_Overdrive5_FanSpeed_Get(ga->iAdapterIndex, 0, &ga->lpFanSpeedValue) != ADL_OK) {
 		applog(LOG_DEBUG, "GPU %d call to fanspeed get failed", gpu);
+	}
+	if (!(ga->lpFanSpeedValue.iFlags & ADL_DL_FANCTRL_FLAG_USER_DEFINED_SPEED)) {
+		/* If user defined is not already specified, set it first */
+		ga->lpFanSpeedValue.iFlags |= ADL_DL_FANCTRL_FLAG_USER_DEFINED_SPEED;
+		ADL_Overdrive5_FanSpeed_Set(ga->iAdapterIndex, 0, &ga->lpFanSpeedValue);
 	}
 	if (!(ga->lpFanSpeedInfo.iFlags & ADL_DL_FANCTRL_SUPPORTS_PERCENT_WRITE)) {
 		/* Must convert speed to an RPM */
@@ -992,11 +1062,6 @@ int set_fanspeed(int gpu, int iFanSpeed)
 		ga->lpFanSpeedValue.iSpeedType = ADL_DL_FANCTRL_SPEED_TYPE_RPM;
 	} else
 		ga->lpFanSpeedValue.iSpeedType = ADL_DL_FANCTRL_SPEED_TYPE_PERCENT;
-	if (!(ga->lpFanSpeedValue.iFlags & ADL_DL_FANCTRL_FLAG_USER_DEFINED_SPEED)) {
-		/* If user defined is not already specified, set it first */
-		ga->lpFanSpeedValue.iFlags = ADL_DL_FANCTRL_FLAG_USER_DEFINED_SPEED;
-		ADL_Overdrive5_FanSpeed_Set(ga->iAdapterIndex, 0, &ga->lpFanSpeedValue);
-	}
 	ga->lpFanSpeedValue.iFanSpeed = iFanSpeed;
 	ret = ADL_Overdrive5_FanSpeed_Set(ga->iAdapterIndex, 0, &ga->lpFanSpeedValue);
 	ga->managed = true;
@@ -1008,15 +1073,17 @@ int set_fanspeed(int gpu, int iFanSpeed)
 #ifdef HAVE_CURSES
 static int set_powertune(int gpu, int iPercentage)
 {
+	struct cgpu_info * const cgpu = &gpus[gpu];
+	struct opencl_device_data * const data = cgpu->device_data;
 	struct gpu_adl *ga;
 	int dummy, ret = 1;
 
-	if (!gpus[gpu].has_adl || !adl_active) {
+	if (!data->has_adl || !adl_active) {
 		wlogprint("Set powertune not supported\n");
 		return ret;
 	}
 
-	ga = &gpus[gpu].adl;
+	ga = &data->adl;
 
 	lock_adl();
 	ADL_Overdrive5_PowerControl_Set(ga->iAdapterIndex, iPercentage);
@@ -1035,30 +1102,29 @@ static int set_powertune(int gpu, int iPercentage)
 static bool fan_autotune(int gpu, int temp, int fanpercent, int lasttemp, bool *fan_window)
 {
 	struct cgpu_info *cgpu = &gpus[gpu];
+	struct opencl_device_data * const data = cgpu->device_data;
 	int tdiff = round(temp - lasttemp);
-	struct gpu_adl *ga = &cgpu->adl;
-	int top = gpus[gpu].gpu_fan;
-	int bot = gpus[gpu].min_fan;
+	struct gpu_adl *ga = &data->adl;
+	const int top = data->gpu_fan;
+	const int bot = data->min_fan;
 	int newpercent = fanpercent;
 	int iMin = 0, iMax = 100;
 
 	get_fanrange(gpu, &iMin, &iMax);
 	if (temp > ga->overtemp && fanpercent < iMax) {
-		applog(LOG_WARNING, "Overheat detected on GPU %d, increasing fan to 100%", gpu);
+		applog(LOG_WARNING, "Overheat detected on GPU %d, increasing fan to 100%%", gpu);
 		newpercent = iMax;
 
-		cgpu->device_last_not_well = time(NULL);
-		cgpu->device_not_well_reason = REASON_DEV_OVER_HEAT;
-		cgpu->dev_over_heat_count++;
-	} else if (temp > ga->targettemp && fanpercent < top && tdiff >= 0) {
+		dev_error(cgpu, REASON_DEV_OVER_HEAT);
+	} else if (temp > gpus[gpu].targettemp && fanpercent < top && tdiff >= 0) {
 		applog(LOG_DEBUG, "Temperature over target, increasing fanspeed");
-		if (temp > ga->targettemp + opt_hysteresis)
+		if (temp > gpus[gpu].targettemp + opt_hysteresis)
 			newpercent = ga->targetfan + 10;
 		else
 			newpercent = ga->targetfan + 5;
 		if (newpercent > top)
 			newpercent = top;
-	} else if (fanpercent > bot && temp < ga->targettemp - opt_hysteresis) {
+	} else if (fanpercent > bot && temp < gpus[gpu].targettemp - opt_hysteresis) {
 		/* Detect large swings of 5 degrees or more and change fan by
 		 * a proportion more */
 		if (tdiff <= 0) {
@@ -1072,10 +1138,10 @@ static bool fan_autotune(int gpu, int temp, int fanpercent, int lasttemp, bool *
 
 		/* We're in the optimal range, make minor adjustments if the
 		 * temp is still drifting */
-		if (fanpercent > bot && tdiff < 0 && lasttemp < ga->targettemp) {
+		if (fanpercent > bot && tdiff < 0 && lasttemp < gpus[gpu].targettemp) {
 			applog(LOG_DEBUG, "Temperature dropping while in target range, decreasing fanspeed");
 			newpercent = ga->targetfan + tdiff;
-		} else if (fanpercent < top && tdiff > 0 && temp > ga->targettemp - opt_hysteresis) {
+		} else if (fanpercent < top && tdiff > 0 && temp > gpus[gpu].targettemp - opt_hysteresis) {
 			applog(LOG_DEBUG, "Temperature rising while in target range, increasing fanspeed");
 			newpercent = ga->targetfan + tdiff;
 		}
@@ -1112,10 +1178,12 @@ void gpu_autotune(int gpu, enum dev_enable *denable)
 	struct gpu_adl *ga;
 
 	cgpu = &gpus[gpu];
-	ga = &cgpu->adl;
+	struct opencl_device_data * const data = cgpu->device_data;
+	ga = &data->adl;
 
 	lock_adl();
 	ADL_Overdrive5_CurrentActivity_Get(ga->iAdapterIndex, &ga->lpActivity);
+	gpus[gpu].temp =
 	temp = __gpu_temp(ga);
 	if (ga->twin)
 		twintemp = __gpu_temp(ga->twin);
@@ -1150,33 +1218,24 @@ void gpu_autotune(int gpu, enum dev_enable *denable)
 
 	if (engine && ga->autoengine) {
 		if (temp > cgpu->cutofftemp) {
-			applog(LOG_WARNING, "Hit thermal cutoff limit on GPU %d, disabling!", gpu);
-			*denable = DEV_RECOVER;
+			// Shutoff and recovery happens back in watchdog_thread
 			newengine = ga->minspeed;
-
-			cgpu->device_last_not_well = time(NULL);
-			cgpu->device_not_well_reason = REASON_DEV_THERMAL_CUTOFF;
-			cgpu->dev_thermal_cutoff_count++;
 		} else if (temp > ga->overtemp && engine > ga->minspeed) {
 			applog(LOG_WARNING, "Overheat detected, decreasing GPU %d clock speed", gpu);
 			newengine = ga->minspeed;
 
-			cgpu->device_last_not_well = time(NULL);
-			cgpu->device_not_well_reason = REASON_DEV_OVER_HEAT;
-			cgpu->dev_over_heat_count++;
-		} else if (temp > ga->targettemp + opt_hysteresis && engine > ga->minspeed && fan_optimal) {
+			dev_error(cgpu, REASON_DEV_OVER_HEAT);
+		} else if (temp > gpus[gpu].targettemp + opt_hysteresis && engine > ga->minspeed && fan_optimal) {
 			applog(LOG_DEBUG, "Temperature %d degrees over target, decreasing clock speed", opt_hysteresis);
 			newengine = engine - ga->lpOdParameters.sEngineClock.iStep;
 			/* Only try to tune engine speed up if this GPU is not disabled */
-		} else if (temp < ga->targettemp && engine < ga->maxspeed && fan_window && *denable == DEV_ENABLED) {
+		} else if (temp < gpus[gpu].targettemp && engine < ga->maxspeed && fan_window && *denable == DEV_ENABLED) {
+			int iStep = ga->lpOdParameters.sEngineClock.iStep;
+
 			applog(LOG_DEBUG, "Temperature below target, increasing clock speed");
-			if (temp < ga->targettemp - opt_hysteresis)
-				newengine = ga->maxspeed;
-			else
-				newengine = engine + ga->lpOdParameters.sEngineClock.iStep;
-		} else if (temp < ga->targettemp && *denable == DEV_RECOVER && opt_restart) {
-			applog(LOG_NOTICE, "Device recovered to temperature below target, re-enabling");
-			*denable = DEV_ENABLED;
+			if (temp < gpus[gpu].targettemp - opt_hysteresis)
+				iStep *= 2;
+			newengine = engine + iStep;
 		}
 
 		if (newengine > ga->maxspeed)
@@ -1192,8 +1251,6 @@ void gpu_autotune(int gpu, enum dev_enable *denable)
 			newengine /= 100;
 			applog(LOG_INFO, "Setting GPU %d engine clock to %d", gpu, newengine);
 			set_engineclock(gpu, newengine);
-			if (cgpu->gpu_memdiff)
-				set_memoryclock(gpu, newengine + cgpu->gpu_memdiff);
 		}
 	}
 	ga->lasttemp = temp;
@@ -1201,11 +1258,13 @@ void gpu_autotune(int gpu, enum dev_enable *denable)
 
 void set_defaultfan(int gpu)
 {
+	struct cgpu_info * const cgpu = &gpus[gpu];
+	struct opencl_device_data * const data = cgpu->device_data;
 	struct gpu_adl *ga;
-	if (!gpus[gpu].has_adl || !adl_active)
+	if (!data->has_adl || !adl_active)
 		return;
 
-	ga = &gpus[gpu].adl;
+	ga = &data->adl;
 	lock_adl();
 	ADL_Overdrive5_FanSpeed_Set(ga->iAdapterIndex, 0, &ga->DefFanSpeedValue);
 	unlock_adl();
@@ -1213,11 +1272,13 @@ void set_defaultfan(int gpu)
 
 void set_defaultengine(int gpu)
 {
+	struct cgpu_info * const cgpu = &gpus[gpu];
+	struct opencl_device_data * const data = cgpu->device_data;
 	struct gpu_adl *ga;
-	if (!gpus[gpu].has_adl || !adl_active)
+	if (!data->has_adl || !adl_active)
 		return;
 
-	ga = &gpus[gpu].adl;
+	ga = &data->adl;
 	lock_adl();
 	ADL_Overdrive5_ODPerformanceLevels_Set(ga->iAdapterIndex, ga->DefPerfLev);
 	unlock_adl();
@@ -1226,11 +1287,13 @@ void set_defaultengine(int gpu)
 #ifdef HAVE_CURSES
 void change_autosettings(int gpu)
 {
-	struct gpu_adl *ga = &gpus[gpu].adl;
+	struct cgpu_info * const cgpu = &gpus[gpu];
+	struct opencl_device_data * const data = cgpu->device_data;
+	struct gpu_adl *ga = &data->adl;
 	char input;
 	int val;
 
-	wlogprint("Target temperature: %d\n", ga->targettemp);
+	wlogprint("Target temperature: %d\n", gpus[gpu].targettemp);
 	wlogprint("Overheat temperature: %d\n", ga->overtemp);
 	wlogprint("Cutoff temperature: %d\n", gpus[gpu].cutofftemp);
 	wlogprint("Toggle [F]an auto [G]PU auto\nChange [T]arget [O]verheat [C]utoff\n");
@@ -1255,11 +1318,11 @@ void change_autosettings(int gpu)
 		if (val < 0 || val > 200)
 			wlogprint("Invalid temperature");
 		else
-			ga->targettemp = val;
+			gpus[gpu].targettemp = val;
 	} else if (!strncasecmp(&input, "o", 1)) {
-		wlogprint("Enter overheat temperature for this GPU in C (%d+)", ga->targettemp);
+		wlogprint("Enter overheat temperature for this GPU in C (%d+)", gpus[gpu].targettemp);
 		val = curses_int("");
-		if (val <= ga->targettemp || val > 200)
+		if (val <= gpus[gpu].targettemp || val > 200)
 			wlogprint("Invalid temperature");
 		else
 			ga->overtemp = val;
@@ -1275,7 +1338,9 @@ void change_autosettings(int gpu)
 
 void change_gpusettings(int gpu)
 {
-	struct gpu_adl *ga = &gpus[gpu].adl;
+	struct cgpu_info * const cgpu = &gpus[gpu];
+	struct opencl_device_data * const data = cgpu->device_data;
+	struct gpu_adl *ga = &data->adl;
 	float fval, fmin = 0, fmax = 0;
 	int val, imin = 0, imax = 0;
 	char input;
@@ -1293,10 +1358,10 @@ updated:
 			wlogprint("(%d RPM)", fanspeed);
 		wlogprint("\n");
 	}
-	wlogprint("Engine Clock: %d MHz\nMemory Clock: %d Mhz\nVddc: %.3f V\nActivity: %d%%\nPowertune: %d%%\n",
+	wlogprint("Engine Clock: %d MHz\nMemory Clock: %d MHz\nVddc: %.3f V\nActivity: %d%%\nPowertune: %d%%\n",
 		engineclock, memclock, vddc, activity, powertune);
 	wlogprint("Fan autotune is %s (%d-%d)\n", ga->autofan ? "enabled" : "disabled",
-		  gpus[gpu].min_fan, gpus[gpu].gpu_fan);
+		  data->min_fan, data->gpu_fan);
 	wlogprint("GPU engine clock autotune is %s (%d-%d)\n", ga->autoengine ? "enabled" : "disabled",
 		ga->minspeed / 100, ga->maxspeed / 100);
 	wlogprint("Change [A]utomatic [E]ngine [F]an [M]emory [V]oltage [P]owertune\n");
@@ -1307,7 +1372,7 @@ updated:
 		change_autosettings(gpu);
 	} else if (!strncasecmp(&input, "e", 1)) {
 		get_enginerange(gpu, &imin, &imax);
-		wlogprint("Enter GPU engine clock speed (%d - %d Mhz)", imin, imax);
+		wlogprint("Enter GPU engine clock speed (%d - %d MHz)", imin, imax);
 		val = curses_int("");
 		if (val < imin || val > imax) {
 			wlogprint("Value is outside safe range, are you sure?\n");
@@ -1321,7 +1386,7 @@ updated:
 			wlogprint("Failed to modify engine clock speed\n");
 	} else if (!strncasecmp(&input, "f", 1)) {
 		get_fanrange(gpu, &imin, &imax);
-		wlogprint("Enter fan percentage (%d - %d %)", imin, imax);
+		wlogprint("Enter fan percentage (%d - %d %%)", imin, imax);
 		val = curses_int("");
 		if (val < imin || val > imax) {
 			wlogprint("Value is outside safe range, are you sure?\n");
@@ -1335,7 +1400,7 @@ updated:
 			wlogprint("Failed to modify fan speed\n");
 	} else if (!strncasecmp(&input, "m", 1)) {
 		get_memoryrange(gpu, &imin, &imax);
-		wlogprint("Enter GPU memory clock speed (%d - %d Mhz)", imin, imax);
+		wlogprint("Enter GPU memory clock speed (%d - %d MHz)", imin, imax);
 		val = curses_int("");
 		if (val < imin || val > imax) {
 			wlogprint("Value is outside safe range, are you sure?\n");
@@ -1377,7 +1442,7 @@ updated:
 		clear_logwin();
 		return;
 	}
-	sleep(1);
+	cgsleep_ms(1000);
 	goto updated;
 }
 #endif
@@ -1386,7 +1451,7 @@ static void free_adl(void)
 {
 	ADL_Main_Memory_Free ((void **)&lpInfo);
 	ADL_Main_Control_Destroy ();
-#if defined (LINUX)
+#ifndef WIN32
 	dlclose(hDLL);
 #else
 	FreeLibrary(hDLL);
@@ -1404,9 +1469,11 @@ void clear_adl(int nDevs)
 	lock_adl();
 	/* Try to reset values to their defaults */
 	for (i = 0; i < nDevs; i++) {
-		ga = &gpus[i].adl;
+		struct cgpu_info * const cgpu = &gpus[i];
+		struct opencl_device_data * const data = cgpu->device_data;
+		ga = &data->adl;
 		/*  Only reset the values if we've changed them at any time */
-		if (!gpus[i].has_adl || !ga->managed)
+		if (!data->has_adl || !ga->managed)
 			continue;
 		ADL_Overdrive5_ODPerformanceLevels_Set(ga->iAdapterIndex, ga->DefPerfLev);
 		free(ga->DefPerfLev);

@@ -1,6 +1,6 @@
 /*
- * SHA-256 driver for ASM routine for x86_64 on Linux
- * Copyright (c) Mark Crichton <crichton@gimp.org>
+ * Copyright 2011 Mark Crichton
+ * Copyright 2012-2013 Luke Dashjr
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the Free
@@ -9,10 +9,13 @@
  *
  */
 
+#include "config.h"
+
 #include "driver-cpu.h"
 
 #ifdef WANT_X8664_SSE4
 
+#include <stdbool.h>
 #include <string.h>
 #include <assert.h>
 
@@ -20,7 +23,7 @@
 #include <stdint.h>
 #include <stdio.h>
 
-extern void CalcSha256_x64_sse4(__m128i *res, __m128i *data, uint32_t init[8]);
+extern void CalcSha256_x64_sse4(__m128i *res, __m128i *data, uint32_t init[8])__asm__("CalcSha256_x64_sse4");
 
 static uint32_t g_sha256_k[] = {
     0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, /*  0 */
@@ -45,15 +48,18 @@ static uint32_t g_sha256_k[] = {
 static uint32_t g_sha256_hinit[8] =
 {0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a, 0x510e527f, 0x9b05688c, 0x1f83d9ab, 0x5be0cd19};
 
-__m128i g_4sha256_k[64];
+__m128i g_4sha256_k[64]__asm__("g_4sha256_k");
 
-bool scanhash_sse4_64(struct thr_info*thr, const unsigned char *pmidstate,
-	unsigned char *pdata,
-	unsigned char *phash1, unsigned char *phash,
-	const unsigned char *ptarget,
+bool scanhash_sse4_64(struct thr_info * const thr, struct work * const work,
 	uint32_t max_nonce, uint32_t *last_nonce,
 	uint32_t nonce)
 {
+	const uint8_t * const pmidstate = work->midstate;
+	uint8_t *pdata = work->data;
+	const uint32_t * const phash1 = hash1_init;
+	uint8_t * const phash = work->hash;
+	
+	uint32_t *hash32 = (uint32_t *)phash;
     uint32_t *nNonce_p = (uint32_t *)(pdata + 76);
     uint32_t m_midstate[8], m_w[16], m_w1[16];
     __m128i m_4w[64], m_4hash[64], m_4hash1[64];
@@ -110,7 +116,8 @@ bool scanhash_sse4_64(struct thr_info*thr, const unsigned char *pmidstate,
 		    *(uint32_t *)&(phash)[i*4] = mi.i[j];
 		}
 
-		if (fulltest(phash, ptarget)) {
+		if (unlikely(hash32[7] == 0))
+		{
 			nonce += j;
 			*last_nonce = nonce;
 			*nNonce_p = nonce;

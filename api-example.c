@@ -1,5 +1,6 @@
 /*
- * Copyright 2011 Kano
+ * Copyright 2011-2012 Andrew Smith
+ * Copyright 2012-2013 Luke Dashjr
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the Free
@@ -7,12 +8,9 @@
  * any later version.  See COPYING for more details.
  */
 
-/* Compile:
- *   gcc api-example.c -I compat/jansson -o bfgminer-api
- */
-
 #include "config.h"
 
+#include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -23,9 +21,8 @@
 #include <sys/types.h>
 
 #include "compat.h"
-#include "miner.h"
 
-#if defined(unix)
+#ifndef WIN32
 	#include <errno.h>
 	#include <sys/socket.h>
 	#include <netinet/in.h>
@@ -37,12 +34,10 @@
 	#define INVSOCK -1
 	#define CLOSESOCKET close
 
-	#define SOCKETINIT {}
+	#define SOCKETINIT do{}while(0)
 
 	#define SOCKERRMSG strerror(errno)
-#endif
-
-#ifdef WIN32
+#else
 	#include <winsock2.h>
 
 	#define SOCKETTYPE SOCKET
@@ -111,7 +106,6 @@
 
 	static char *WSAErrorMsg()
 	{
-		char *msg;
 		int i;
 		int id = WSAGetLastError();
 
@@ -129,11 +123,13 @@
 
 	static WSADATA WSA_Data;
 
-	#define SOCKETINIT	int wsa; \
-				if (wsa = WSAStartup(0x0202, &WSA_Data)) { \
+	#define SOCKETINIT	do {  \
+		int wsa; \
+				if ( (wsa = WSAStartup(0x0202, &WSA_Data)) ) { \
 					printf("Socket startup failed: %d\n", wsa); \
 					return 1; \
-				}
+		}  \
+	} while (0)
 
 	#ifndef SHUT_RDWR
 	#define SHUT_RDWR SD_BOTH
@@ -145,6 +141,7 @@
 static const char SEPARATOR = '|';
 static const char COMMA = ',';
 static const char EQ = '=';
+static int ONLY;
 
 void display(char *buf)
 {
@@ -191,16 +188,23 @@ void display(char *buf)
 
 int callapi(char *command, char *host, short int port)
 {
-	char buf[RECVSIZE+1];
+	size_t bufsz = RECVSIZE;
+	char *buf = malloc(bufsz+1);
 	struct hostent *ip;
 	struct sockaddr_in serv;
 	SOCKETTYPE sock;
 	int ret = 0;
 	int n, p;
 
+	assert(buf);
 	SOCKETINIT;
 
 	ip = gethostbyname(host);
+	if (!ip)
+	{
+		printf("Failed to resolve host %s\n", host);
+		return 1;
+	}
 
 	sock = socket(AF_INET, SOCK_STREAM, 0);
 	if (sock == INVSOCK) {
@@ -226,8 +230,16 @@ int callapi(char *command, char *host, short int port)
 	else {
 		p = 0;
 		buf[0] = '\0';
-		while (p < RECVSIZE) {
-			n = recv(sock, &buf[p], RECVSIZE - p , 0);
+		while (true)
+		{
+			if (bufsz < RECVSIZE + p)
+			{
+				bufsz *= 2;
+				buf = realloc(buf, bufsz);
+				assert(buf);
+			}
+			
+			n = recv(sock, &buf[p], RECVSIZE, 0);
 
 			if (SOCKETFAIL(n)) {
 				printf("Recv failed: %s\n", SOCKERRMSG);
@@ -242,9 +254,13 @@ int callapi(char *command, char *host, short int port)
 			buf[p] = '\0';
 		}
 
-		printf("Reply was '%s'\n", buf);
+		if (!ONLY)
+			printf("Reply was '%s'\n", buf);
+		else
+			printf("%s\n", buf);
 
-		display(buf);
+		if (!ONLY)
+			display(buf);
 	}
 
 	CLOSESOCKET(sock);
@@ -274,29 +290,36 @@ int main(int argc, char *argv[])
 	char *host = "127.0.0.1";
 	short int port = 4028;
 	char *ptr;
+	int i = 1;
 
 	if (argc > 1)
 		if (strcmp(argv[1], "-?") == 0
 		||  strcmp(argv[1], "-h") == 0
 		||  strcmp(argv[1], "--help") == 0) {
-			fprintf(stderr, "usAge: %s [command [ip/host [port]]]\n", argv[0]);
+			fprintf(stderr, "Usage: %s [command [ip/host [port]]]\n", argv[0]);
 			return 1;
 		}
 
-	if (argc > 1) {
-		ptr = trim(argv[1]);
+	if (argc > 1)
+		if (strcmp(argv[1], "-o") == 0) {
+			ONLY = 1;
+			i = 2;
+		}
+
+	if (argc > i) {
+		ptr = trim(argv[i++]);
 		if (strlen(ptr) > 0)
 			command = ptr;
 	}
 
-	if (argc > 2) {
-		ptr = trim(argv[2]);
+	if (argc > i) {
+		ptr = trim(argv[i++]);
 		if (strlen(ptr) > 0)
 			host = ptr;
 	}
 
-	if (argc > 3) {
-		ptr = trim(argv[3]);
+	if (argc > i) {
+		ptr = trim(argv[i]);
 		if (strlen(ptr) > 0)
 			port = atoi(ptr);
 	}
