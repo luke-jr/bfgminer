@@ -2813,9 +2813,9 @@ bool stratum_set_goal(struct pool * const pool, json_t * const val, json_t * con
 		char * const idstr = json_dumps_ANY(j_id, 0);
 		char buf[0x80];
 		if (unlikely(emsg))
-			snprintf(buf, sizeof(buf), "{\"id\":%s,\"result\":true,\"error\":null}", idstr);
-		else
 			snprintf(buf, sizeof(buf), "{\"id\":%s,\"result\":null,\"error\":[-1,\"%s\",null]}", idstr, emsg);
+		else
+			snprintf(buf, sizeof(buf), "{\"id\":%s,\"result\":true,\"error\":null}", idstr);
 		free(idstr);
 		stratum_send(pool, buf, strlen(buf));
 	}
