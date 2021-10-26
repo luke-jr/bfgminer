@@ -12407,8 +12407,8 @@ static void raise_fd_limits(void)
 #ifdef HAVE_SETRLIMIT
 	struct rlimit fdlimit;
 	rlim_t old_soft_limit;
-	char frombuf[0x10] = "unlimited";
-	char hardbuf[0x10] = "unlimited";
+	char frombuf[MAX_STR_UINT(unsigned long)] = "unlimited";
+	char hardbuf[MAX_STR_UINT(unsigned long)] = "unlimited";
 	
 	if (getrlimit(RLIMIT_NOFILE, &fdlimit))
 		applogr(, LOG_DEBUG, "setrlimit: Failed to getrlimit(RLIMIT_NOFILE)");
