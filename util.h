@@ -106,6 +106,8 @@ const char *bfg_json_obj_string(json_t *json, const char *key, const char *fail)
 
 extern const char *__json_array_string(json_t *, unsigned int entry);
 
+#define MAX_STR_UINT(type)  ((sizeof(type) * CHAR_BIT + 2) / 3)
+
 #ifndef min
 #  define min(a, b)  ((a) < (b) ? (a) : (b))
 #endif
