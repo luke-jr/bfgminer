@@ -47,7 +47,12 @@ int httpsrv_handle_req(struct MHD_Connection *conn, const char *url, const char 
 }
 
 static
-int httpsrv_handle_access(void *cls, struct MHD_Connection *conn, const char *url, const char *method, const char *version, const char *upload_data, size_t *upload_data_size, void **con_cls)
+#if MHD_VERSION < 0x00097002
+int
+#else
+enum MHD_Result
+#endif
+httpsrv_handle_access(void *cls, struct MHD_Connection *conn, const char *url, const char *method, const char *version, const char *upload_data, size_t *upload_data_size, void **con_cls)
 {
 	bytes_t *upbuf;
 	
