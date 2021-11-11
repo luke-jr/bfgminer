@@ -155,6 +155,7 @@ struct knc_state {
 	/* lock to protect resources between different threads */
 	pthread_mutex_t state_lock;
 
+	struct cgpu_info * all_cgpus[KNC_MAX_ASICS][KNC_MAX_DIES_PER_ASIC];
 	struct knc_core_state core[KNC_MAX_ASICS * KNC_MAX_DIES_PER_ASIC * KNC_MAX_CORES_PER_DIE];
 };
 
@@ -250,8 +251,6 @@ static int knc_transfer_completed(struct knc_state *knc, int stamp)
 	return (int)(knc->read_buffer_count - stamp) >= 1;
 }
 
-static struct cgpu_info * all_cgpus[KNC_MAX_ASICS][KNC_MAX_DIES_PER_ASIC] = {{NULL}};
-
 /* Note: content of knc might be not initialized yet */
 static bool prealloc_all_cgpus(struct knc_state *knc)
 {
@@ -260,7 +259,7 @@ static bool prealloc_all_cgpus(struct knc_state *knc)
 
 	prev_cgpu = NULL;
 	for (channel = 0; channel < KNC_MAX_ASICS; ++channel) {
-		cgpu = all_cgpus[channel][0];
+		cgpu = knc->all_cgpus[channel][0];
 		if (NULL != cgpu)
 			continue;
 		cgpu = malloc(sizeof(*cgpu));
@@ -281,18 +280,18 @@ static bool prealloc_all_cgpus(struct knc_state *knc)
 		die = 0;
 		for_each_managed_proc(proc, cgpu) {
 			proc->deven = DEV_DISABLED;
-			all_cgpus[channel][die++] = proc;
+			knc->all_cgpus[channel][die++] = proc;
 		}
 	}
 
 	return true;
 }
 
-static struct cgpu_info * get_cgpu(int channel, int die)
+static struct cgpu_info * get_cgpu(struct knc_state *knc, int channel, int die)
 {
 	if ((channel < 0) || (channel >= KNC_MAX_ASICS) || (die < 0) || (die >= KNC_MAX_DIES_PER_ASIC))
 		return NULL;
-	return all_cgpus[channel][die];
+	return knc->all_cgpus[channel][die];
 }
 
 int knc_change_die_state(void* device_data, int asic_id, int die_id, bool enable)
@@ -310,7 +309,7 @@ int knc_change_die_state(void* device_data, int asic_id, int die_id, bool enable
 		goto out_unlock;
 	}
 
-	struct cgpu_info *proc = get_cgpu(asic_id, die_id);
+	struct cgpu_info *proc = get_cgpu(knc, asic_id, die_id);
 
 	for (die = 0; die < knc->dies; ++die) {
 		if (knc->die[die].channel != asic_id || knc->die[die].die != die_id)
@@ -470,7 +469,7 @@ err_nomem:
 				knc->die[dies].cores = die_info[channel][die].cores;
 				knc->die[dies].core = pcore;
 				knc->die[dies].knc = knc;
-				knc->die[dies].proc = get_cgpu(channel, die);
+				knc->die[dies].proc = get_cgpu(knc, channel, die);
 				knc->die[dies].proc->deven = DEV_ENABLED;
 				if (NULL == first_cgpu)
 					first_cgpu = knc->die[dies].proc;
@@ -550,7 +549,7 @@ bool knc_init(struct thr_info * const thr)
 	die_detected[0][0] = true;
 	for (channel = 0; channel < KNC_MAX_ASICS; ++channel) {
 		for (die = 0; die < KNC_MAX_DIES_PER_ASIC; ++die) {
-			proc = get_cgpu(channel, die);
+			proc = get_cgpu(knc, channel, die);
 			if (NULL != proc) {
 				proc->deven = die_detected[channel][die] ? DEV_ENABLED : DEV_DISABLED;
 			}
