@@ -12621,9 +12621,17 @@ void start_cgpu(struct cgpu_info *cgpu)
 
 		thread_reportout(thr);
 
-		if (unlikely(thr_info_create(thr, NULL, miner_thread, thr)))
+		pthread_attr_t attr;
+		if (unlikely(pthread_attr_init(&attr)))
+			quit(1, "thread %d create failed (init)", thr->id);
+		if (unlikely(pthread_attr_setstacksize(&attr, (size_t) 2 << 20)))
+			quit(1, "thread %d create failed (set statck size)", thr->id);
+
+		if (unlikely(thr_info_create(thr, &attr, miner_thread, thr)))
 			quit(1, "thread %d create failed", thr->id);
 		
+		pthread_attr_destroy(&attr);
+
 		notifier_wake(thr->notifier);
 	}
 	if (cgpu->deven == DEV_ENABLED)
