@@ -211,6 +211,7 @@ void init_adl(int nDevs)
 	int result, i, j, devices = 0, last_adapter = -1, gpu = 0, dummy = 0;
 	struct gpu_adapters adapters[MAX_GPUDEVICES], vadapters[MAX_GPUDEVICES];
 	bool devs_match = true;
+	bool test;
 
 	if (unlikely(pthread_mutex_init(&adl_lock, NULL))) {
 		applog(LOG_ERR, "Failed to init adl_lock in init_adl");
@@ -336,10 +337,11 @@ void init_adl(int nDevs)
 				if (i == j)
 					continue;
 #ifdef WIN32
-				if (adapters[j].iBusNumber < adapters[i].iBusNumber)
+				test = adapters[j].iBusNumber < adapters[i].iBusNumber;
 #else
-				if (adapters[j].iBusNumber > adapters[i].iBusNumber)
+				test = adapters[j].iBusNumber > adapters[i].iBusNumber;
 #endif
+				if (test)
 					virtual_gpu++;
 			}
 			if (virtual_gpu != i) {
