@@ -3878,7 +3878,7 @@ utility_to_hashrate(double utility)
 	return utility * 0x4444444;
 }
 
-static const char*_unitchar = "pn\xb5m kMGTPEZY?";
+static const char*_unitchar = "pn\xb5m kMGTPEZYRQ?";
 static const int _unitbase = 4;
 
 static
