@@ -91,14 +91,9 @@ for build in "${builds[@]}"; do
 		--prefix='C:\\Program Files\\BFGMiner\\' \
 		CFLAGS="${CFLAGS} -Wall" \
 		--disable-cpumining \
-		--enable-opencl \
-		--enable-adl \
-		--enable-bitforce \
-		--enable-icarus \
-		--enable-modminer \
-		--enable-ztex \
-		--enable-keccak \
 		--enable-scrypt \
+		--enable-futurebit \
+		--disable-other-drivers \
 		--without-system-libbase58 \
 		--host="$machine"
 	make $MAKEOPTS

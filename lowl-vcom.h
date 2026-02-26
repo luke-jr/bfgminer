@@ -45,6 +45,6 @@ extern bool vcom_set_timeout_ms(int fd, unsigned timeout_ms);
 extern enum bfg_gpio_value get_serial_cts(int fd);
 extern enum bfg_gpio_value set_serial_dtr(int fd, enum bfg_gpio_value dtr);
 extern enum bfg_gpio_value set_serial_rts(int fd, enum bfg_gpio_value rts);
-extern bool valid_baud(int baud);
+//extern bool valid_baud(int baud);
 
 #endif
