@@ -494,6 +494,42 @@ const struct bfg_set_device_definition avalon_set_device_funcs[] = {
 	{NULL},
 };
 
+#ifdef HAVE_CURSES
+static
+void avalon_wlogprint_status(struct cgpu_info * const proc)
+{
+	struct avalon_info *info = proc->device_data;
+	
+	if (((info->temp0?1:0) + (info->temp1?1:0) + (info->temp2?1:0)) > 1)
+	{
+		wlogprint("Temperatures:");
+		if (info->temp0)  wlogprint(" %uC", (unsigned)info->temp0);
+		if (info->temp1)  wlogprint(" %uC", (unsigned)info->temp1);
+		if (info->temp2)  wlogprint(" %uC", (unsigned)info->temp2);
+	}
+	wlogprint("\n");
+	
+	wlogprint("Clock speed: %d\n", info->frequency);
+}
+
+static
+void avalon_tui_wlogprint_choices(struct cgpu_info * const proc)
+{
+	wlogprint("[C]lock speed ");
+}
+
+static
+const char *avalon_tui_handle_choice(struct cgpu_info * const proc, const int input)
+{
+	switch (input)
+	{
+		case 'c': case 'C':
+			return proc_set_device_tui_wrapper(proc, NULL, avalon_set_clock, "Set clock speed (256, 270, 282, 300, 325, 350, or 375)", NULL);
+	}
+	return NULL;
+}
+#endif
+
 /* Non blocking clearing of anything in the buffer */
 static void avalon_clear_readbuf(int fd)
 {
@@ -1006,4 +1042,10 @@ struct device_drv avalon_drv = {
 	.get_api_stats = avalon_api_stats,
 	.reinit_device = avalon_init,
 	.thread_shutdown = avalon_shutdown,
+	
+#ifdef HAVE_CURSES
+	.proc_wlogprint_status = avalon_wlogprint_status,
+	.proc_tui_wlogprint_choices = avalon_tui_wlogprint_choices,
+	.proc_tui_handle_choice = avalon_tui_handle_choice,
+#endif
 };

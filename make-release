@@ -130,6 +130,7 @@ for build in "${builds[@]}"; do
 		my @todo = map { chomp; $_ } <STDIN>;
 		my %have = map { lc $_=>undef } (@todo, qw(
 			advapi32.dll
+			crypt32.dll
 			imagehlp.dll
 			kernel32.dll
 			msvcrt.dll

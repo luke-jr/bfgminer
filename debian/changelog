@@ -1,3 +1,35 @@
+bfgminer (5.5.0-0precise1) precise; urgency=low
+
+  * Support for Alcheminer using a USB->UART dongle
+
+ -- Luke Dashjr <luke+bfgminer@dashjr.org>  Sat, 30 Dec 2017 10:09:52 -0000
+
+bfgminer (5.4.2-0precise1) precise; urgency=low
+
+  * Fix some possible edge case problems with stratum proxying (--stratum-port)
+  * openwrt: Binary packages for 15.05
+  * Fix 2D work support for GBT servers (requires libblkmaker 0.5.3 or newer)
+
+ -- Luke Dashjr <luke+bfgminer@dashjr.org>  Sat, 26 Mar 2016 06:52:15 -0000
+
+bfgminer (5.4.1-0precise1) precise; urgency=low
+
+  * Bugfixes only.
+
+ -- Luke Dashjr <luke+bfgminer@dashjr.org>  Sat, 21 Nov 2015 18:12:26 -0000
+
+bfgminer (5.4.0-0precise1) precise; urgency=low
+
+  * RPC: Ability to change pool management strategy.
+  * Pool option #cksuggest to use CKPool-compatible mining.suggest_difficulty stratum extension.
+  * alchemist: New scrypt ASIC driver, written and maintained by jstefanop (requires custom FPGA reprogramming).
+  * antminer, avalon, compac, hashfast, and jingtian: Support for setting clock frequency from the TUI's device management interface.
+  * antminer & compac: Support for setting clock by frequency MHz.
+  * bitforce: Ability to change voltages from RPC and TUI.
+  * bitmain: New driver for Bitmain Antminer S-series units (up to S5).
+
+ -- Luke Dashjr <luke+bfgminer@dashjr.org>  Fri, 23 Oct 2015 03:38:05 -0000
+
 bfgminer (5.3.0-0precise1) precise; urgency=low
 
   * compac: Support for the GekkoScience Compac BM1384 USB stick miner

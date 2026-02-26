@@ -385,9 +385,11 @@ void init_adl(int nDevs)
 		}
 
 		applog(LOG_INFO, "GPU %d %s hardware monitoring enabled", gpu, lpInfo[i].strAdapterName);
-		if (gpus[gpu].name)
+		if (gpus[gpu].name) {
 			free((void*)gpus[gpu].name);
-		if (lpInfo[i].strAdapterName)
+			gpus[gpu].name = NULL;
+		}
+		if (lpInfo[i].strAdapterName[0])
 			gpus[gpu].name = trimmed_strdup(lpInfo[i].strAdapterName);
 		data->has_adl = true;
 		/* Flag adl as active if any card is successfully activated */

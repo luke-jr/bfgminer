@@ -245,4 +245,10 @@ struct device_drv jingtian_drv = {
 	.poll = aan_poll,
 	
 	.get_api_extra_device_status = aan_api_device_status,
+	
+#ifdef HAVE_CURSES
+	.proc_wlogprint_status = aan_wlogprint_status,
+	.proc_tui_wlogprint_choices = aan_tui_wlogprint_choices,
+	.proc_tui_handle_choice = aan_tui_handle_choice,
+#endif
 };

@@ -156,6 +156,7 @@ The list of requests - a (*) means it requires privileged access - and replies:
                               ADL=X, <- Y or N if ADL is compiled in the code
                               ADL in use=X, <- Y or N if any GPU has ADL
                               Strategy=Name, <- the current pool strategy
+                              Rotate Period=N, <- rotate strategy period
                               Log Interval=N, <- log interval (--log N)
                               Device Code=GPU ICA , <- spaced list of compiled
                                                        device drivers
@@ -358,6 +359,10 @@ The list of requests - a (*) means it requires privileged access - and replies:
                               queue, scantime, expiry (integer in the range
                                                        0 to 9999)
                               coinbase-sig (string)
+                              http-port (valid port number)
+                              strategy (name of valid strategy, and optional
+                                        number of minutes if rotate)
+                              stratum-port (valid port number)
 
  pgaset|N,opt[,val] (*)
                none           This is equivalent to PROCSET on the first
@@ -448,6 +453,14 @@ https://www.npmjs.org/package/miner-rpc
 
 Feature Changelog for external applications using the API:
 
+
+API V3.4 (BFGMiner v5.4.0)
+
+Modified API commands:
+ 'config' - add 'Rotate Period'
+ 'setconfig' - add 'strategy'
+
+---------
 
 API V3.3 (BFGMiner v5.0.0)
 
@@ -544,6 +557,7 @@ Modified API commands:
  'pgadisable' - disable all processors for a numbered full device
  'pgaidentify' - choose first processor of numbered full device
  'pgaset' - choose first processor of numbered full device
+ 'setconfig' - add 'stratum-port' number
 
 Added API commands:
  'procs'

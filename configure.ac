@@ -1,4 +1,4 @@
-dnl * Copyright 2011-2014 Luke Dashjr
+dnl * Copyright 2011-2016 Luke Dashjr
 dnl * Copyright 2011-2013 Con Kolivas
 dnl * Copyright 2010-2011 Jeff Garzik
 dnl * Copyright 2012 Xiangfu
@@ -14,7 +14,7 @@ dnl * any later version.  See COPYING for more details.
 ##--##--##--##--##--##--##--##--##--##--##--##--##--##--##--##--##
 ##--##--##--##--##--##--##--##--##--##--##--##--##--##--##--##--##
 m4_define([v_maj], [5])
-m4_define([v_min], [3])
+m4_define([v_min], [5])
 m4_define([v_mic], [0])
 ##--##--##--##--##--##--##--##--##--##--##--##--##--##--##--##--##
 m4_define([v_ver], [v_maj.v_min.v_mic])
@@ -85,6 +85,7 @@ AC_CHECK_HEADERS([sys/mman.h])
 AC_CHECK_HEADERS([sys/prctl.h])
 AC_CHECK_HEADERS([sys/file.h])
 AC_CHECK_HEADERS([sys/termios.h])
+AC_CHECK_HEADERS([sys/unistd.h])
 AC_CHECK_HEADERS([linux/spi/spidev.h])
 
 AC_CHECK_MEMBER([struct i2c_msg.buf],[
@@ -223,7 +224,7 @@ m4_define([BFG_FIND_INCLUDE_PATH],[
 	m4_pushdef([_result_var],[inclpath_[]patsubst(_header_file,[[./]],[_])])
 	AC_CHECK_HEADER([_rel_path/_header_file],[
 		AC_MSG_CHECKING([_header_file path])
-		_result_var=`echo '[#]include <'"_rel_path"'/_header_file>' | ${CPP} -M - 2>/dev/null | ${SED} [-E -e ':a' -e '/\\$/!b b' -e N -e 's/\\\n/ /' -e 't a' -e ':b' -e 's/^[^:]*:[[:space:]]*(([^[:space:]\]|\\.)*[[:space:]])*(([^[:space:]\]|\\.)*)]patsubst([_header_file],[\.],[\\.])[([[:space:]].*)?$/\3/' -e 't' -e d]`
+		_result_var=`echo '[#]include <'"_rel_path"'/_header_file>' | ${CPP} -M - 2>/dev/null | ${SED} [-E -e ':a' -e '/\\$/!b b' -e N -e 's/\\\n/ /' -e 't a' -e ':b' -e 's/^[^:]*:[[:space:]]*(([^[:space:]\]|\\.)*[[:space:]])*(([^[:space:]\]|\\.)*)(\\|\\\\|\/)?]patsubst([_header_file],[\.],[\\.])[([[:space:]].*)?$/\3/' -e 't' -e d]`
 		if test "x$_result_var" = "x"; then
 			AC_MSG_RESULT([failed])
 			AC_MSG_ERROR([Couldn't determine include path for _header_file])
@@ -553,6 +554,11 @@ else
 	adl="no"
 fi
 
+BFG_DRIVER(,AlcheMist,scrypt,no,[
+	need_lowl_vcom=yes
+	has_asic=yes
+])
+
 BFG_DRIVER(,BitForce,SHA256d,auto,[
 	driverlist="$driverlist bitforce:pci/need_lowl_pci"
 	if test "x$lowl_pci" = "xyes"; then
@@ -580,7 +586,7 @@ BFG_DRIVER(,Icarus,SHA256d,auto,[
 	has_asic=yes
 	have_udevrules=true
 ])
-driverlist="$driverlist cairnsmore/USE_ICARUS erupter/USE_ICARUS antminer/USE_ICARUS"
+driverlist="$driverlist cairnsmore/USE_ICARUS erupter/USE_ICARUS antminer/USE_ICARUS compac/USE_ICARUS"
 
 BFG_DRIVER(,DualMiner,Icarus,auto,[
 	need_gc3355=yes
@@ -656,10 +662,23 @@ AC_ARG_WITH([libevent],
 )
 if test "x$libevent" != "xno"; then
 	PKG_CHECK_MODULES([libevent],[libevent >= 2.0.3],[
-		AC_DEFINE([USE_LIBEVENT],[1],[Defined to 1 if libevent support is wanted])
+		PKG_CHECK_MODULES([libevent_pthreads],[libevent_pthreads],[
+			libevent_CFLAGS="${libevent_CFLAGS} ${libevent_pthreads_CFLAGS}"
+			libevent_LIBS="${libevent_LIBS} ${libevent_pthreads_LIBS}"
+		],[true])
+		AC_MSG_CHECKING([if libevent supports threading])
+		BFG_PREPROC_IFELSE([EVTHREAD_USE_PTHREADS_IMPLEMENTED || EVTHREAD_USE_WINDOWS_THREADS_IMPLEMENTED],[event2/thread.h],[
+			AC_MSG_RESULT([yes])
+			have_libevent=yes
+		],[
+			AC_MSG_RESULT([no])
+		])
+	])
+	if test "x$have_libevent" = "xyes"; then
 		libevent=yes
-	],[
-		libevent=no
+		need_work2d=yes
+		AC_DEFINE([USE_LIBEVENT],[1],[Defined to 1 if libevent support is wanted])
+	else
 		libevent_enableaction="install libevent 2.0.3+"
 		if test -n "$need_bfg_driver_proxy_enableaction"; then
 			need_bfg_driver_proxy_enableaction="${need_bfg_driver_proxy_enableaction} (getwork) or libevent 2.0.3+ (stratum)"
@@ -671,9 +690,7 @@ if test "x$libevent" != "xno"; then
 		else
 			AC_MSG_WARN([libevent 2.0.3+ not found; stratum proxy will be unavailable])
 		fi
-	])
-	if test "x$libevent" = "xyes"; then
-		need_work2d=yes
+		libevent=no
 	fi
 fi
 AM_CONDITIONAL([USE_LIBEVENT], [test x$libevent = xyes])

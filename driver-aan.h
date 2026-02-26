@@ -47,4 +47,8 @@ extern const struct bfg_set_device_definition aan_set_device_funcs[];
 
 extern struct api_data *aan_api_device_status(struct cgpu_info *);
 
+extern void aan_wlogprint_status(struct cgpu_info *proc);
+extern void aan_tui_wlogprint_choices(struct cgpu_info *proc);
+extern const char *aan_tui_handle_choice(struct cgpu_info *proc, int input);
+
 #endif

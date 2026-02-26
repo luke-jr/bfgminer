@@ -1,5 +1,5 @@
 /*
- * Copyright 2013-2014 Luke Dashjr
+ * Copyright 2013-2016 Luke Dashjr
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the Free
@@ -9,6 +9,7 @@
 
 #include "config.h"
 
+#include <limits.h>
 #include <stdbool.h>
 #include <stdint.h>
 #include <string.h>
@@ -70,15 +71,21 @@ void *work2d_pad_xnonce(void * const buf_, const struct stratum_work * const swo
 	return &buf[pad];
 }
 
-void work2d_gen_dummy_work(struct work * const work, struct stratum_work * const swork, const struct timeval * const tvp_prepared, const void * const xnonce2, const uint32_t xnonce1)
+static void work2d_gen_dummy_work_prepare(struct work * const work, struct stratum_work * const swork, const struct timeval * const tvp_prepared)
 {
-	uint8_t *p, *s;
-	
 	*work = (struct work){
 		.pool = swork->pool,
 		.work_restart_id = swork->work_restart_id,
 		.tv_staged = *tvp_prepared,
 	};
+}
+
+void work2d_gen_dummy_work(struct work * const work, struct stratum_work * const swork, const struct timeval * const tvp_prepared, const void * const xnonce2, const uint32_t xnonce1)
+{
+	uint8_t *p, *s;
+	
+	work2d_gen_dummy_work_prepare(work, swork, tvp_prepared);
+	
 	bytes_resize(&work->nonce2, swork->n2size);
 	s = bytes_buf(&work->nonce2);
 	p = &s[swork->n2size - work2d_xnonce2sz];
@@ -94,6 +101,12 @@ void work2d_gen_dummy_work(struct work * const work, struct stratum_work * const
 	gen_stratum_work2(work, swork);
 }
 
+void work2d_gen_dummy_work_for_stale_check(struct work * const work, struct stratum_work * const swork, const struct timeval * const tvp_prepared, cglock_t * const data_lock_p)
+{
+	work2d_gen_dummy_work_prepare(work, swork, tvp_prepared);
+	gen_stratum_work3(work, swork, data_lock_p);
+}
+
 bool work2d_submit_nonce(struct thr_info * const thr, struct stratum_work * const swork, const struct timeval * const tvp_prepared, const void * const xnonce2, const uint32_t xnonce1, const uint32_t nonce, const uint32_t ntime, bool * const out_is_stale, const float nonce_diff)
 {
 	struct work _work, *work;
@@ -104,6 +117,7 @@ bool work2d_submit_nonce(struct thr_info * const thr, struct stratum_work * cons
 	work2d_gen_dummy_work(work, swork, tvp_prepared, xnonce2, xnonce1);
 	*(uint32_t *)&work->data[68] = htobe32(ntime);
 	work->nonce_diff = nonce_diff;
+	work->rolltime = INT_MAX;  // FIXME
 	
 	// Check if it's stale, if desired
 	if (out_is_stale)

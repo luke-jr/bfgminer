@@ -55,7 +55,7 @@ extern void _applog(int prio, const char *str);
 #define IN_FMT_FFL " in %s %s():%d"
 
 #define applog(prio, fmt, ...) do { \
-	if (opt_debug || prio != LOG_DEBUG) { \
+	if (opt_debug || (prio) != LOG_DEBUG) { \
 			char tmp42[LOGBUFSIZ]; \
 			snprintf(tmp42, sizeof(tmp42), fmt, ##__VA_ARGS__); \
 			_applog(prio, tmp42); \
@@ -63,7 +63,7 @@ extern void _applog(int prio, const char *str);
 } while (0)
 
 #define applogsiz(prio, _SIZ, fmt, ...) do { \
-	if (opt_debug || prio != LOG_DEBUG) { \
+	if (opt_debug || (prio) != LOG_DEBUG) { \
 			char tmp42[_SIZ]; \
 			snprintf(tmp42, sizeof(tmp42), fmt, ##__VA_ARGS__); \
 			_applog(prio, tmp42); \

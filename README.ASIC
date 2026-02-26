@@ -54,27 +54,73 @@ tries to pre-prepare for it. A reasonable starting place is:
 --queue 8192
 
 
+ALCHEMIST
+---------
+This driver requires the latest FPGA firmware flashed on the blades (stock
+firmware has major bug and won't run properly with this driver). For
+instructions, please visit: https://litecointalk.org/?topic=27370
+The driver has been designed to run each of the 8 blades inside an AlcheMist
+256 as a separate miner. To detect all the blades you need to manually probe it
+with the following serial ports:
+
+-S ALC:all -S ALC:/dev/ttyO1 -S ALC:/dev/ttyO2 -S ALC:/dev/ttyO3
+-S ALC:/dev/ttyO4
+
+(the four ttyUSB ports are auto detected by all)
+
+The driver supports custom frequency settings in the range of 200-400 MHz in 16
+MHz increments (driver will default to 352 MHz if these conditions are not met).
+Frequency is set with the following --set option:
+
+--set ALC:clock=336
+
+You can also set the frequency per board by specifying the tty port:
+
+--set ALC@/dev/ttyO3:clock=352
+
+Driver also supports running blades off a Raspberry Pi directly or with USB Dongles. For a single blade off a raspberry Pi make sure you have configured GPIO pin 25 correctly (see below) and scan via
+-S ALC:/dev/ttyAMA0
+
+echo 25 > /sys/class/gpio/export
+echo out > /sys/class/gpio/gpio25/direction
+
+for multiple blades using USB Dongles connected to a pi make sure the reset pin on the alcheminer board is connected to the RTS/DTR pin on the dongle board, and option --set
+ALC:mode=1 added to startup command line.
+
+
 ANTMINER U3
 -----------
 
 The U3 does not support autodetection, so you will want to use --scan-serial to
 manually probe it. For example, to scan all devices, you can use:
 
--S antminer:all
+-S antminer:all --set antminer:chip=BM1382
 
 Additionally, for optimal performance you will need to set voltage, clock, and
-timing. Neither voltage nor clock for the U3 are documented by the manufacturer,
-thus must be provided as hexadecimal configuration codes. Timing is provided in
-the number of nanoseconds each hash takes at the given configuration. A
+timing. Voltage format for the U3 is not documented by the manufacturer, thus
+must be provided as hexadecimal configuration codes. Timing is provided in the
+number of nanoseconds each hash takes at the given configuration. A
 known-working configuration is:
 
---set antminer:voltage=x800 --set antminer:clock=x1286 --set antminer:timing=0.022421
+--set antminer:voltage=x800 --set antminer:clock=237.5
+--set antminer:timing=0.022421
 
-Some valid values for clock setting are:
-    x0783 for 100 MHz, x0983 for 125 MHz, x0b83 for 150 MHz, x0d83 for 175 MHz,
-    x0782 for 200 MHz, x0882 for 225 MHz, x0982 for 250 MHz, x0a82 for 275 MHz,
-    x0b82 for 300 MHz, x0c82 for 325 MHz, x0d82 for 350 MHz, x0e82 for 375 MHz,
-    and x08f2 for 400 MHz
+To set different frequency and voltage settings for multiple U3 miners on a
+single BFGMiner process use:
+
+--set antminer@\\.\COM10:voltage=xNNNN
+
+or
+
+--set antminer@/dev/ttyUSB1:voltage=xNNNN
+
+Another option is to program the CP2102 chip so they have unique serial numbers;
+this method would avoid problems with the device showing up on different tty/COM
+locations after reboot/hotplug:
+
+/cp210x-program -w -F eeprom-content.AntU3-custom.hex --set-product-string='Antminer U3' --set-serial-number=myveryown0001
+
+Then you can use --set antminer@myveryown0001:voltage=xNNNN
 
 
 AVALON 1
@@ -235,9 +281,13 @@ COMPAC
 These USB sticks are based on Bitmain's BM1384 chip, and use the antminer
 driver. You can set the clock frequency with
 
---set compac:clock=x0782
+--set compac:clock=200
 
-The same values for Antminer U3 (above) are valid for the BM1384.
+You can also adjust the clock real-time while the stick is hashing using RPC's pgaset:
+
+bfgminer-rpc "pgaset|0,clock,x0982"
+                     |       ^^^^^ hex frequency
+                     ^ device number
 
 
 HEX*FURY

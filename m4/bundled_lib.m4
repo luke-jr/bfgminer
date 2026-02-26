@@ -50,7 +50,7 @@ AC_DEFUN([BFG_BUNDLED_LIB_VARS],[
 	BFG_CHECK_LD_ORIGIN
 	_AC_SRCDIRS(["$ac_dir"])
 	$1_CFLAGS='-I'"${ac_abs_top_srcdir}"'/$2'
-	$1_LIBS='-L'"${ac_abs_top_srcdir}"'/$2/.libs -Wl,-rpath,\$$ORIGIN/$2/.libs'"$origin_LDFLAGS"' m4_foreach_w([mylib],[$3],[ -l[]mylib])'
+	$1_LIBS='-L'"${ac_abs_top_builddir}"'/$2/.libs -Wl,-rpath,\$$ORIGIN/$2/.libs'"$origin_LDFLAGS"' m4_foreach_w([mylib],[$3],[ -l[]mylib])'
 	$1_SUBDIRS=$2
 	$1_EXTRADEPS=$1_directory
 	BUNDLED_LIB_RULES="$BUNDLED_LIB_RULES

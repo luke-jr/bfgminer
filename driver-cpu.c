@@ -43,6 +43,8 @@
 
 BFG_REGISTER_DRIVER(cpu_drv)
 
+struct cgpu_info *cpus;
+
 #if defined(__linux) && defined(CPU_ZERO)  /* Linux specific policy and affinity management */
 #include <sched.h>
 static inline void drop_policy(void)

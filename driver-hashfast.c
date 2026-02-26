@@ -844,6 +844,27 @@ void hashfast_wlogprint_status(struct cgpu_info * const proc)
 		}
 	}
 }
+
+static
+void hashfast_tui_wlogprint_choices(struct cgpu_info * const proc)
+{
+	wlogprint("[C]lock speed ");
+}
+
+static
+const char *hashfast_tui_handle_choice(struct cgpu_info * const proc, const int input)
+{
+	switch (input)
+	{
+		case 'c': case 'C':
+		{
+			char prompt[0x80];
+			snprintf(prompt, sizeof(prompt), "Set clock speed (%u-%u)", 1, 0xffe);
+			return proc_set_device_tui_wrapper(proc, NULL, hashfast_set_clock_runtime, prompt, NULL);
+		}
+	}
+	return NULL;
+}
 #endif
 
 struct device_drv hashfast_ums_drv = {
@@ -865,5 +886,7 @@ struct device_drv hashfast_ums_drv = {
 	
 #ifdef HAVE_CURSES
 	.proc_wlogprint_status = hashfast_wlogprint_status,
+	.proc_tui_wlogprint_choices = hashfast_tui_wlogprint_choices,
+	.proc_tui_handle_choice = hashfast_tui_handle_choice,
 #endif
 };

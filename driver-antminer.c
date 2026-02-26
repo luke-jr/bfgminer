@@ -50,7 +50,9 @@ static const char *bm1382_chips[] = {
 
 static bool antminer_chip_has_bm1382_freq_register(const char * const prodstr)
 {
-	for (const char **chipname = bm1382_chips; chipname; ++chipname) {
+	if (!prodstr)
+		return false;
+	for (const char **chipname = bm1382_chips; *chipname; ++chipname) {
 		if (strstr(prodstr, *chipname)) {
 			return true;
 		}
@@ -312,6 +314,28 @@ const struct bfg_set_device_definition antminer_set_device_funcs[] = {
 	{NULL},
 };
 
+#ifdef HAVE_CURSES
+static
+void antminer_tui_wlogprint_choices(struct cgpu_info * const proc)
+{
+	struct ICARUS_INFO * const info = proc->device_data;
+	
+	if (info->has_bm1382_freq_register)
+		wlogprint("[C]lock speed ");
+}
+
+static
+const char *antminer_tui_handle_choice(struct cgpu_info * const proc, const int input)
+{
+	switch (input)
+	{
+		case 'c': case 'C':
+			return proc_set_device_tui_wrapper(proc, NULL, antminer_set_clock, "Set clock speed", NULL);
+	}
+	return NULL;
+}
+#endif
+
 static
 bool compac_lowl_match(const struct lowlevel_device_info * const info)
 {
@@ -338,9 +362,14 @@ void antminer_drv_init()
 	antminer_drv.lowl_match = antminer_lowl_match;
 	antminer_drv.lowl_probe = antminer_lowl_probe;
 	antminer_drv.identify_device = antminer_identify;
+#ifdef HAVE_CURSES
+	antminer_drv.proc_tui_wlogprint_choices = antminer_tui_wlogprint_choices;
+	antminer_drv.proc_tui_handle_choice = antminer_tui_handle_choice;
+#endif
 	++antminer_drv.probe_priority;
 	
 	compac_drv = antminer_drv;
+	compac_drv.dname = "compac";
 	compac_drv.name = "CBM";
 	compac_drv.lowl_match = compac_lowl_match;
 	compac_drv.lowl_probe = compac_lowl_probe;

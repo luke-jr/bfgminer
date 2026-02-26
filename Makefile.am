@@ -92,8 +92,8 @@ TEST_EXTENSIONS = .sh
 
 .PHONY: update-version
 update-version:
-	./gen-version.sh >version.h.new
-	cmp version.h version.h.new && rm version.h.new || mv version.h.new version.h
+	( cd $(top_srcdir) && $(top_srcdir)/gen-version.sh ) >version.h.new
+	cmp $(top_srcdir)/version.h version.h.new && rm version.h.new || mv version.h.new $(top_srcdir)/version.h
 version.h: update-version
 bfgminer_SOURCES += version.c version.h
 BUILT_SOURCES = version.h
@@ -255,6 +255,10 @@ endif
 
 if HAS_ASIC
 dist_doc_DATA += README.ASIC
+endif
+
+if USE_ALCHEMIST
+bfgminer_SOURCES += driver-alchemist.c
 endif
 
 if USE_BITFORCE

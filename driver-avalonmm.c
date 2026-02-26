@@ -1,5 +1,5 @@
 /*
- * Copyright 2014 Luke Dashjr
+ * Copyright 2014-2016 Luke Dashjr
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the Free
@@ -509,7 +509,6 @@ bool avalonmm_update_swork_from_pool(struct cgpu_info * const master_dev, struct
 	stratum_work_cpy(&mmjob->swork, &pool->swork);
 	cg_runlock(&pool->data_lock);
 	timer_set_now(&mmjob->tv_prepared);
-	mmjob->swork.data_lock_p = NULL;
 	if (!avalonmm_send_swork(fd, chain, &mmjob->swork, mmjob->jobid, &mmjob->nonce_diff))
 	{
 		avalonmm_free_job(mmjob);
@@ -895,24 +894,8 @@ void avalonmm_tui_wlogprint_choices(struct cgpu_info * const proc)
 	wlogprint("[V]oltage ");
 }
 
-static
-const char *avalonmm_tui_wrapper(struct cgpu_info * const proc, bfg_set_device_func_t func, const char * const prompt)
-{
-	static char replybuf[0x20];
-	char * const cvar = curses_input(prompt);
-	if (!cvar)
-		return "Cancelled\n";
-	
-	const char *reply = func(proc, NULL, cvar, NULL, NULL);
-	free(cvar);
-	if (reply)
-	{
-		snprintf(replybuf, sizeof(replybuf), "%s\n", reply);
-		return replybuf;
-	}
-	
-	return "Successful\n";
-}
+#define avalonmm_tui_wrapper(proc, func, prompt) \
+	proc_set_device_tui_wrapper(proc, NULL, func, prompt, NULL)
 
 static
 const char *avalonmm_tui_handle_choice(struct cgpu_info * const proc, const int input)

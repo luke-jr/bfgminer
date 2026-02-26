@@ -106,6 +106,8 @@ const char *bfg_json_obj_string(json_t *json, const char *key, const char *fail)
 
 extern const char *__json_array_string(json_t *, unsigned int entry);
 
+#define MAX_STR_UINT(type)  ((sizeof(type) * CHAR_BIT + 2) / 3)
+
 #ifndef min
 #  define min(a, b)  ((a) < (b) ? (a) : (b))
 #endif
@@ -217,7 +219,7 @@ void cgsleep_us(int64_t us);
 #define cgtimer_time(ts_start) timer_set_now(ts_start)
 #define cgsleep_prepare_r(ts_start) cgtimer_time(ts_start)
 void cgsleep_ms_r(cgtimer_t *ts_start, int ms);
-void (*cgsleep_us_r)(cgtimer_t *ts_start, int64_t us);
+extern void (*cgsleep_us_r)(cgtimer_t *ts_start, int64_t us);
 
 static inline
 int cgtimer_to_ms(cgtimer_t *cgt)

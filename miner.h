@@ -954,6 +954,11 @@ static inline void cg_runlock(cglock_t *lock)
 	rd_unlock(&lock->rwlock);
 }
 
+static inline void cg_iunlock(cglock_t *lock)
+{
+	mutex_unlock(&lock->mutex);
+}
+
 static inline void cg_wunlock(cglock_t *lock)
 {
 	wr_unlock_noyield(&lock->rwlock);
@@ -969,6 +974,8 @@ extern bool opt_protocol;
 extern bool opt_dev_protocol;
 extern char *opt_coinbase_sig;
 extern char *request_target_str;
+extern float request_pdiff;
+extern double request_bdiff;
 extern int opt_skip_checks;
 extern char *opt_kernel_path;
 extern char *opt_socks_proxy;
@@ -983,7 +990,7 @@ extern int last_logstatusline_len;
 extern bool have_libusb;
 #endif
 extern int httpsrv_port;
-extern int stratumsrv_port;
+extern long stratumsrv_port;
 extern char *opt_api_allow;
 extern bool opt_api_mcast;
 extern char *opt_api_mcast_addr;
@@ -1071,7 +1078,8 @@ extern void thread_reportin(struct thr_info *thr);
 extern void thread_reportout(struct thr_info *);
 extern void clear_stratum_shares(struct pool *pool);
 extern void hashmeter2(struct thr_info *);
-extern bool stale_work(struct work *, bool share);
+extern bool stale_work2(struct work *, bool share, bool have_pool_data_lock);
+#define stale_work(work, share)  stale_work2(work, share, false)
 extern bool stale_work_future(struct work *, bool share, unsigned long ustime);
 extern void blkhashstr(char *out, const unsigned char *hash);
 static const float minimum_pdiff = max(FLT_MIN, 1./0x100000000);
@@ -1115,6 +1123,8 @@ extern void adjust_quota_gcd(void);
 extern struct pool *add_pool2(struct mining_goal_info *);
 #define add_pool()  add_pool2(get_mining_goal("default"))
 extern bool add_pool_details(struct pool *pool, bool live, char *url, char *user, char *pass);
+extern int bfg_strategy_parse(const char *strategy);
+extern bool bfg_strategy_change(int strategy, const char *param);
 
 #define MAX_GPUDEVICES 16
 #define MAX_DEVICES 4096
@@ -1361,6 +1371,7 @@ struct pool {
 	char work_restart_timestamp[11];
 	uint32_t	block_id;
 	struct mining_goal_info *goal;
+	enum bfg_tristate pool_diff_effective_retroactively;
 
 	enum pool_protocol proto;
 
@@ -1538,6 +1549,7 @@ extern void stratum_work_cpy(struct stratum_work *dst, const struct stratum_work
 extern void stratum_work_clean(struct stratum_work *);
 extern bool pool_has_usable_swork(const struct pool *);
 extern void gen_stratum_work2(struct work *, struct stratum_work *);
+extern void gen_stratum_work3(struct work *, struct stratum_work *, cglock_t *data_lock_p);
 extern void inc_hw_errors3(struct thr_info *thr, const struct work *work, const uint32_t *bad_nonce_p, float nonce_diff);
 static inline
 void inc_hw_errors2(struct thr_info * const thr, const struct work * const work, const uint32_t *bad_nonce_p)

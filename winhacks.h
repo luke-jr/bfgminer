@@ -13,4 +13,8 @@
 #	undef MOUSE_MOVED
 #endif
 
+#ifdef interface
+#undef interface
+#endif
+
 #endif
