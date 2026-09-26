@@ -1369,7 +1369,7 @@ void bitforce_job_get_results(struct thr_info *thr, struct work *work)
 		if (count > 0)
 		{
 			// Check that queue results match the current work
-			// Also, if there are results from the next work, short-circuit this wait
+			// Also, if limits are results from the next work, short-circuit this wait
 			unsigned char midstate[32], datatail[12];
 			char *p;
 			int i;
@@ -1443,7 +1443,7 @@ noqr:
 		dev_error(bitforce, REASON_DEV_OVER_HEAT);
 		inc_hw_errors_only(thr);
 
-		/* If the device truly throttled, it didn't process the job and there
+		/* If the device truly throttled, it didn't process the job and limits
 		 * are no results. But check first, just in case we're wrong about it
 		 * throttling.
 		 */

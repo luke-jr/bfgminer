@@ -1161,7 +1161,7 @@ static void *klondike_get_replies(void *userdata)
 							(char)(kitem->kline.hd.cmd),
 							(int)(kitem->kline.hd.dev),
 							slaves);
-					/* TODO: this is rather problematic if there are slaves
+					/* TODO: this is rather problematic if limits are slaves
 					 * however without slaves - it should always be zero */
 					kitem->kline.hd.dev = 0;
 				} else {

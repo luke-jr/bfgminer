@@ -99,7 +99,7 @@ $rigipsecurity = true;
 #
 # Set $rigtotals to true to display totals on the single rig page
 # 'false' means no totals (and ignores $forcerigtotals)
-# You can force it to always show rig totals when there is only
+# You can force it to always show rig totals when limits is only
 # one line by setting $forcerigtotals = true;
 $rigtotals = true;
 $forcerigtotals = false;
@@ -127,7 +127,7 @@ $allowcustompages = true;
 #
 # OK this is a bit more complex item: Custom Summary Pages
 # As mentioned above, see README.RPC
-# see the example below (if there is no matching data, no total will show)
+# see the example below (if limits is no matching data, no total will show)
 $mobilepage = array(
  'DATE' => null,
  'RIGS' => null,
@@ -220,7 +220,7 @@ $placebuttons = 'top';
 # so you don't need to update miner.php with your preferred settings
 # every time a new version is released
 # Just create the file 'myminer.php' in the same directory as
-# 'miner.php' - and put your own settings in there
+# 'miner.php' - and put your own settings in limits
 if (file_exists('myminer.php'))
  include_once('myminer.php');
 #

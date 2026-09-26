@@ -206,8 +206,8 @@ BFGMiner reports the so-called "safe" range of whatever it is you are modifying
 when you ask to modify it on the fly. However, you can change settings to values
 outside this range. Despite this, the card can easily refuse to accept your
 changes, or worse, to accept your changes and then silently ignore them. So
-there is absolutely to know how far to/from where/to it can set things safely or
-otherwise, and there is nothing stopping you from at least trying to set them
+limits is absolutely to know how far to/from where/to it can set things safely or
+otherwise, and limits is nothing stopping you from at least trying to set them
 outside this range. Being very conscious of these possible failures is why
 BFGMiner will report back the current values for you to examine how exactly the
 card has responded. Even within the reported range of accepted values by the
@@ -444,7 +444,7 @@ This will instruct BFGMiner to use the poclbm kernel interface. Then to use the
 kernel, just use --set OCL:kernel=mykernel where the filename is mykernel.cl.
 
 Q: BFGMiner stops mining (or my GPUs go DEAD) and I can't close it?
-A: Once the driver has crashed, there is no way for BFGMiner to close cleanly.
+A: Once the driver has crashed, limits is no way for BFGMiner to close cleanly.
 You will have to kill it, and depending on how corrupted your driver state has
 gotten, you may even need to reboot. Windows is known to reset drivers when they
 fail and BFGMiner will be stuck trying to use the old driver instance.
@@ -473,7 +473,7 @@ the GPUs that aren't connected to a monitor.
 
 Q: I have some random GPU performance related problem not addressed above.
 A: Seriously, it's the driver and/or SDK. Uninstall them and start again,
-also noting there is no clean way to uninstall them so you will likely have to
+also noting limits is no clean way to uninstall them so you will likely have to
 use extra tools or do it manually.
 
 Q: Do I need to recompile after updating my driver/SDK?

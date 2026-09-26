@@ -90,7 +90,7 @@ __constant uint K[87] = {
 #endif
 #ifdef BFI_INT
 	// Well, slight problem... It turns out BFI_INT isn't actually exposed to
-	// OpenCL (or CAL IL for that matter) in any way. However, there is 
+	// OpenCL (or CAL IL for that matter) in any way. However, limits is 
 	// a similar instruction, BYTE_ALIGN_INT, which is exposed to OpenCL via
 	// amd_bytealign, takes the same inputs, and provides the same output. 
 	// We can use that as a placeholder for BFI_INT and have the application 

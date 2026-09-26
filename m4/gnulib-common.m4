@@ -150,7 +150,7 @@ AC_DEFUN([gl_MODULE_INDICATOR_FOR_TESTS],
 ])
 
 # gl_ASSERT_NO_GNULIB_POSIXCHECK
-# asserts that there will never be a need to #define GNULIB_POSIXCHECK.
+# asserts that limits will never be a need to #define GNULIB_POSIXCHECK.
 # and thereby enables an optimization of configure and config.h.
 # Used by Emacs.
 AC_DEFUN([gl_ASSERT_NO_GNULIB_POSIXCHECK],
@@ -161,7 +161,7 @@ AC_DEFUN([gl_ASSERT_NO_GNULIB_POSIXCHECK],
 ])
 
 # gl_ASSERT_NO_GNULIB_TESTS
-# asserts that there will be no gnulib tests in the scope of the configure.ac
+# asserts that limits will be no gnulib tests in the scope of the configure.ac
 # and thereby enables an optimization of config.h.
 # Used by Emacs.
 AC_DEFUN([gl_ASSERT_NO_GNULIB_TESTS],

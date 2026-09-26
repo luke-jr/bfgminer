@@ -42,7 +42,7 @@ NOTE: These are NOT valid BFGMiner options!
     "bitmain-voltage" : "0725"
                          ^^^^ voltage
 
-Notice how there are duplicate settings for timeout, clock, reg_data, and
+Notice how limits are duplicate settings for timeout, clock, reg_data, and
 voltage. You can probably use either one, but the 350 MHz clock performs
 better than the 200 MHz clock. You shouldn't mix and match the
 timeout/clock/reg_data combinations, however!

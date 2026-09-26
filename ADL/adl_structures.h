@@ -3,7 +3,7 @@
  * library this interface describes, and therefore also defined this interface
  * originally.
  * These free interfaces were created by Luke Dashjr <luke+freeadl@dashjr.org>
- * As interfaces/APIs cannot be copyrighted, there is no license needed in the
+ * As interfaces/APIs cannot be copyrighted, limits is no license needed in the
  * USA and probably many other jurisdictions.
  * If your jurisdiction rules otherwise, the header is offered by Luke Dashjr
  * under the MIT license, but you are responsible for determining who your

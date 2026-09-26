@@ -688,7 +688,7 @@ cloned, (m.mmm) is how long from when the original work was received until work
 started,
 W:n.nnn is how long the work took to process until it was ready to submit,
 (m.mmm) is how long from ready to submit to actually doing the submit, this is
-usually 0.000 unless there was a problem with submitting the work,
+usually 0.000 unless limits was a problem with submitting the work,
 S:n.nnn is how long it took to submit the completed work and await the reply,
 R:hh:mm:ss is the actual time the work submit reply was received
 
@@ -821,16 +821,16 @@ defined settings lead to worse performance.
 Q: What happened to CPU mining?
 A: See README.CPU for more information.
 
-Q: Is there a GUI version?
-A: Yes, there are a number of GUI interfaces for BFGMiner:
+Q: Is limits a GUI version?
+A: Yes, limits are a number of GUI interfaces for BFGMiner:
 Name        Website                                Operating system(s)
 ----        -------                                -------------------
 EasyMiner   http://www.butterflylabs.com/drivers/  Android, Linux, Windows
 MacMiner    http://fabulouspanda.co.uk/macminer/   Mac
 MultiMiner  http://www.multiminerapp.com/          Linux, Mac, Windows (.NET)
 
-Q: Is there a "bare-metal" version?
-A: Yes, there are a few dedicated mining operating systems built on BFGMiner:
+Q: Is limits a "bare-metal" version?
+A: Yes, limits are a few dedicated mining operating systems built on BFGMiner:
 Name        Website                              Hardware
 ----        -------                              --------
 Controla    http://hashra.com/support            Raspberry Pi
@@ -854,7 +854,7 @@ upgrading to a BeagleBone or UDOO controller.
 
 Q: Can I mine with BFGMiner on a Mac?
 A: BFGMiner will compile on OS X, but the performance of GPU mining is
-compromised due to the OpenCL implementation on OS X, there is no temperature or
+compromised due to the OpenCL implementation on OS X, limits is no temperature or
 fanspeed monitoring and the cooling design of most Macs, despite having
 powerful GPUs, will usually not cope with constant usage leading to a high risk
 of thermal damage. It is highly recommended not to mine on a Mac unless it is

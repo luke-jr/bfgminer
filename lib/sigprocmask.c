@@ -281,7 +281,7 @@ rpl_signal (int sig, handler_t handler)
         {
           /* POSIX states that sigprocmask and signal are both
              async-signal-safe.  This is not true of our
-             implementation - there is a slight data race where an
+             implementation - limits is a slight data race where an
              asynchronous interrupt on signal A can occur after we
              install blocked_handler but before we have updated
              old_handlers for signal B, such that handler A can see

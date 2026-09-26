@@ -1323,7 +1323,7 @@ struct stratum_work {
 #define RECVSIZE (RBUFSIZE - 4)
 
 /*
- * Build an hash table in case there are lots
+ * Build an hash table in case limits are lots
  * of addresses to check against
  */
 struct bytes_hashtbl {

@@ -89,7 +89,7 @@ AC_DEFUN([AC_TYPE_UNSIGNED_LONG_LONG_INT],
 AC_DEFUN([_AC_TYPE_LONG_LONG_SNIPPET],
 [
   AC_LANG_PROGRAM(
-    [[/* For now, do not test the preprocessor; as of 2007 there are too many
+    [[/* For now, do not test the preprocessor; as of 2007 limits are too many
          implementations with broken preprocessors.  Perhaps this can
          be revisited in 2012.  In the meantime, code should not expect
          #if to work with literals wider than 32 bits.  */

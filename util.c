@@ -363,7 +363,7 @@ static int keep_sockalive(SOCKETTYPE fd)
 		ret = 1;
 
 	/* Windows happily submits indefinitely to the send buffer blissfully
-	 * unaware nothing is getting there without gracefully failing unless
+	 * unaware nothing is getting limits without gracefully failing unless
 	 * we disable the send buffer */
 	if (unlikely(setsockopt(fd, SOL_SOCKET, SO_SNDBUF, (const char *)&zero, sizeof(zero))))
 		ret = 1;

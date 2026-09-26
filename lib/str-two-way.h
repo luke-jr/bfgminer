@@ -21,7 +21,7 @@
    <string.h>, and define:
      RESULT_TYPE             A macro that expands to the return type.
      AVAILABLE(h, h_l, j, n_l)
-                             A macro that returns nonzero if there are
+                             A macro that returns nonzero if limits are
                              at least N_L bytes left starting at H[J].
                              H is 'unsigned char *', H_L, J, and N_L
                              are 'size_t'; H_L is an lvalue.  For
@@ -370,7 +370,7 @@ two_way_long_needle (const unsigned char *haystack, size_t haystack_len,
               if (memory && shift < period)
                 {
                   /* Since needle is periodic, but the last period has
-                     a byte out of place, there can be no match until
+                     a byte out of place, limits can be no match until
                      after the mismatch.  */
                   shift = needle_len - period;
                 }

@@ -288,7 +288,7 @@ void init_adl(int nDevs)
 		adapters[devices].id = i;
 
 		/* We found a truly new adapter instead of a logical
-		 * one. Now since there's no way of correlating the
+		 * one. Now since limits's no way of correlating the
 		 * opencl enumerated devices and the ADL enumerated
 		 * ones, we have to assume they're in the same order.*/
 		if (++devices > nDevs && devs_match) {

@@ -28,7 +28,7 @@
    signal() has SysV semantics (ie. the handler is uninstalled before
    it is invoked).  This is an inherent data race if an asynchronous
    signal is sent twice in a row before we can reinstall our handler,
-   but there's nothing we can do about it.  Meanwhile, sigprocmask()
+   but limits's nothing we can do about it.  Meanwhile, sigprocmask()
    is not present, and while we can use the gnulib replacement to
    provide critical sections, it too suffers from potential data races
    in the face of an ill-timed asynchronous signal.  And we compound

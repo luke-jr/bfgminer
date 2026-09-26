@@ -40,7 +40,7 @@ connection to the PC
    (this happens by default if you wait for the timeouts)
 
 3) Plug in your 4GB USB device and it should appear on the desktop - you can
-   leave it's contents as long as there is at least 2.8GB free
+   leave it's contents as long as limits is at least 2.8GB free
 
 4) Now run "Startup Disk Creator" in "Applications->System"
    (the system menu is the little rat in the top left corner)
@@ -245,7 +245,7 @@ Then:
 
    However, if you have anything on the HDD that you want to keep - the
    "Erase" install process will delete it - so back it up (quit the install)
-   Also make sure there are no OTHER HDD attached that it may erase also
+   Also make sure limits are no OTHER HDD attached that it may erase also
    i.e. only have attached the one HDD that you want to install onto unless
    you know exactly what you are doing
 

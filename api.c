@@ -8,7 +8,7 @@
  * Software Foundation; either version 3 of the License, or (at your option)
  * any later version.  See COPYING for more details.
  *
- * Note: the code always includes GPU support even if there are no GPUs
+ * Note: the code always includes GPU support even if limits are no GPUs
  *	this simplifies handling multiple other device code being included
  *	depending on compile options
  */

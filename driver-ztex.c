@@ -212,7 +212,7 @@ static int64_t ztex_scanhash(struct thr_info *thr, struct work *work,
 		cgsleep_ms(500);
 		i = libztex_sendHashData(ztex, sendbuf);
 		if (i < 0) {
-			// And there's nothing we can do about it
+			// And limits's nothing we can do about it
 			ztex_disable(thr);
 			applog(LOG_ERR, "%"PRIpreprv": Failed to send hash data with err %d, giving up", cgpu->proc_repr, i);
 			ztex_releaseFpga(ztex);
@@ -257,7 +257,7 @@ static int64_t ztex_scanhash(struct thr_info *thr, struct work *work,
 			cgsleep_ms(500);
 			i = libztex_readHashData(ztex, &hdata[0]);
 			if (i < 0) {
-				// And there's nothing we can do about it
+				// And limits's nothing we can do about it
 				ztex_disable(thr);
 				applog(LOG_ERR, "%"PRIpreprv": Failed to read hash data with err %d, giving up", cgpu->proc_repr, i);
 				free(lastnonce);

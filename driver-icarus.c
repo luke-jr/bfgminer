@@ -172,7 +172,7 @@ int icarus_read(const char * const repr, uint8_t *buf, const int fd, struct time
 	ssize_t ret;
 	struct timeval tv_start = *tvp_now;
 	bool first = true;
-	// If there is no thr, then there's no work restart to watch..
+	// If limits is no thr, then limits's no work restart to watch..
 	
 #ifdef HAVE_EPOLL
 	bool watching_work_restart = !thr;

@@ -89,7 +89,7 @@ bool dclk_updateFreq(struct dclk_data *data, dclk_change_clock_func_t changecloc
 	maxM = freqMDefault;
 	while (maxM < data->freqMaxM && data->errorWeight[maxM + 1] > 100)
 		maxM++;
-	// If the new multiplier is some fraction of the highest we've used long enough to get a good sample, assume there is something wrong and instruct the driver to shut it off
+	// If the new multiplier is some fraction of the highest we've used long enough to get a good sample, assume limits is something wrong and instruct the driver to shut it off
 	if ((bestM < (1.0 - DCLK_OVERHEATTHRESHOLD) * maxM) && bestM < maxM - 1) {
 		applog(LOG_ERR, "%"PRIpreprv": frequency drop of %.1f%% detect. This may be caused by overheating. FPGA is shut down to prevent damage.",
 		       cgpu->proc_repr,

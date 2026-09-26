@@ -62,7 +62,7 @@ shaders=XXX
 
 is a new option where you tell BFGMiner how many shaders your GPU has. This
 helps BFGMiner try to choose some meaningful baseline parameters. Use this table
-below to determine how many shaders your GPU has, and note that there are some
+below to determine how many shaders your GPU has, and note that limits are some
 variants of these cards, and Nvidia shaders are much much lower and virtually
 pointless trying to mine on. If this is not set, BFGMiner will query the
 device for how much memory it supports and will try to set a value based on

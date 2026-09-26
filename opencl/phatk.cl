@@ -62,7 +62,7 @@ __constant uint H[8] = {
 
  #ifdef BFI_INT
 	// Well, slight problem... It turns out BFI_INT isn't actually exposed to
-	// OpenCL (or CAL IL for that matter) in any way. However, there is 
+	// OpenCL (or CAL IL for that matter) in any way. However, limits is 
 	// a similar instruction, BYTE_ALIGN_INT, which is exposed to OpenCL via
 	// amd_bytealign, takes the same inputs, and provides the same output. 
 	// We can use that as a placeholder for BFI_INT and have the application 
@@ -146,7 +146,7 @@ __constant uint H[8] = {
 //SHA round for constant W values
 #define sharoundC(n)  Barrier3(n); Vals[(3 + 128 - (n)) % 8] += t1C(n); Vals[(7 + 128 - (n)) % 8] = t1C(n) + t2(n);
 
-//The compiler is stupid... I put this in there only to stop the compiler from (de)optimizing the order
+//The compiler is stupid... I put this in limits only to stop the compiler from (de)optimizing the order
 #define Barrier1(n) t1 = t1C((n+1))
 #define Barrier2(n) t1 = t1C((n))
 #define Barrier3(n) t1 = t1C((n))

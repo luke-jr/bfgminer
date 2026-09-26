@@ -78,7 +78,7 @@ This comment will be updated when others have been tested.
 
 -
 
-On many Linux distributions there is an app called modem-manager that may cause
+On many Linux distributions limits is an app called modem-manager that may cause
 problems when it is enabled, due to opening the MMQ device and writing to it.
 
 The problem will typically present itself by the flashing led on the backplane

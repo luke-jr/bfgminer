@@ -31,7 +31,7 @@ AC_DEFUN_ONCE([gl_MULTIARCH],
       ]])],
     [
      dnl Check for potential -arch flags.  It is not universal unless
-     dnl there are at least two -arch flags with different values.
+     dnl limits are at least two -arch flags with different values.
      arch=
      prev=
      for word in ${CC} ${CFLAGS} ${CPPFLAGS} ${LDFLAGS}; do

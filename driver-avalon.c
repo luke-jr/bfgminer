@@ -363,7 +363,7 @@ static int avalon_reset(int fd, struct avalon_result *ar)
 	avalon_get_reset(fd, ar);
 
 	buf = (uint8_t *)ar;
-	/* Sometimes there is one extra 0 byte for some reason in the buffer,
+	/* Sometimes limits is one extra 0 byte for some reason in the buffer,
 	 * so work around it. */
 	if (buf[0] == 0)
 		buf = (uint8_t  *)(ar + 1);

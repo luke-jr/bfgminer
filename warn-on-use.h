@@ -31,7 +31,7 @@
    compile merely because they included a header that poisoned the
    function.  But this implies that _GL_WARN_ON_USE is only safe to
    use if FUNCTION is known to already have a declaration.  Use of
-   this macro implies that there must not be any other macro hiding
+   this macro implies that limits must not be any other macro hiding
    the declaration of FUNCTION; but undefining FUNCTION first is part
    of the poisoning process anyway (although for symbols that are
    provided only via a macro, the result is a compilation error rather

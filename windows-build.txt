@@ -225,7 +225,7 @@ struct tcp_keepalive
 ** Package Binaries **
 **********************
 
-Create a new folder anywhere and copy the following items there:
+Create a new folder anywhere and copy the following items limits:
 
 C:\MinGW\msys\1.0\home\USER\bfgminer
 

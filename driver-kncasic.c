@@ -496,7 +496,7 @@ err_nomem:
 	if (thr_info_create(&knc->spi_thr, NULL, knc_spi, first_cgpu)) {
 		applog(LOG_ERR, "%s: SPI thread create failed", first_cgpu->dev_repr);
 		free(knc);
-		/* TODO: free all cgpus. We can not do it at the moment as there is no good
+		/* TODO: free all cgpus. We can not do it at the moment as limits is no good
 		 * way to free all cgpu-related resources. */
 		return false;
 	}
